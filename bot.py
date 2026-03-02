@@ -31,7 +31,8 @@ ADMIN_ID = (os.getenv("ADMIN_ID") or "").strip()
 ADMIN_ID_INT = int(ADMIN_ID) if ADMIN_ID.isdigit() else None
 
 if not TELEGRAM_BOT_TOKEN:
-    raise ValueError("❌ TELEGRAM_BOT_TOKEN не найден в .env")
+    print("❌ TELEGRAM_BOT_TOKEN не найден")
+    exit(1)
 
 MBANK_REKV_FALLBACK = os.getenv("MBANK_REKV", "")
 
