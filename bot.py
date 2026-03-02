@@ -730,7 +730,7 @@ async def setprice_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     order["updated_at"] = now_iso()
     save_orders()
 
-    pay = get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK or "💳 Оплата через MBank: <укажи реквизиты>"
+    pay = get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK or "💳 Оплата через MBank: <📌 +996999888332 Имронбек С.>"
     promo_line = f"\n🎟 Промокод: {promo} (-{pct}%)" if promo and pct else ""
     await context.bot.send_message(
         chat_id=order["user_id"],
