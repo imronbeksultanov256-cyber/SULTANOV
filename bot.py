@@ -1499,8 +1499,8 @@ if app.job_queue:
 else:
     logging.warning('JobQueue не установлен. Установи: python-telegram-bot[job-queue]')
     
-    print("✅ Бот запущен")
-    app.run_polling()
+print("✅ Бот запущен")
+app.run_polling()
 
 if __name__ == "__main__":
     main()
