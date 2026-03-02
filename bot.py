@@ -1494,11 +1494,11 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # reminder job
-    if app.job_queue:
-        app.job_queue.run_repeating(unpaid_reminder_job, interval=3600, first=3600)
+if app.job_queue:
+    app.job_queue.run_repeating(unpaid_reminder_job, interval=3600, first=3600)
 else:
-    logging.warning("JobQueue не установлен. Установи: python-telegram-bot[job-queue]")
-
+    logging.warning('JobQueue не установлен. Установи: python-telegram-bot[job-queue]')
+    
     print("✅ Бот запущен")
     app.run_polling()
 
