@@ -1195,6 +1195,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Каталог
     product_key = key_from_button_text(user_text)
     if product_key:
+        # 🔥 отключаем поддержку если была включена
+        context.user_data["support_mode"] = False
+        context.user_data["support_order_id"] = None
+        
         promo_default = context.user_data.get("promo_default", "")
         if product_key == "gistology_ready":
             oid = new_order_id()
