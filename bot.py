@@ -116,6 +116,60 @@ def parse_iso(dt_str: str):
     except Exception:
         return None
 
+
+# =====================================================
+# Deadline parsing + Urgency (<=4h => +100, >5h => 0)
+# =====================================================
+def parse_deadline_text(text: str):
+    """Поддержка: HH:MM (сегодня), 'сегодня 15:00', 'завтра 10:00', 'через 3 часа', YYYY-MM-DD, YYYY-MM-DD HH:MM"""
+    if not text:
+        return None
+    t = text.strip().lower()
+    now = datetime.now()
+
+    m = re.search(r"через\s*(\d+)\s*(час|часа|часов|день|дня|дней)", t)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2)
+        return now + (timedelta(hours=n) if "час" in unit else timedelta(days=n))
+
+    m = re.search(r"^(сегодня|завтра)\s+(\d{1,2}):(\d{2})$", t)
+    if m:
+        day = m.group(1)
+        hh = int(m.group(2)); mm = int(m.group(3))
+        base = now if day == "сегодня" else (now + timedelta(days=1))
+        return base.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", t)
+    if m:
+        hh = int(m.group(1)); mm = int(m.group(2))
+        return now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", t):
+        try:
+            d = datetime.fromisoformat(t)
+            return d.replace(hour=23, minute=59, second=0, microsecond=0)
+        except Exception:
+            return None
+
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}", t):
+        try:
+            return datetime.fromisoformat(t.replace(" ", "T"))
+        except Exception:
+            return None
+
+    return None
+
+def urgency_fee_from_deadline(deadline_text: str):
+    """Если до дедлайна <=4 часа => +100. Если >5 часов => 0. (4-5 часов тоже 0)"""
+    dt = parse_deadline_text(deadline_text)
+    if not dt:
+        return False, 0, None
+    hours_left = (dt - datetime.now()).total_seconds() / 3600
+    if hours_left <= 4:
+        return True, 100, int(hours_left)
+    return False, 0, int(hours_left)
+
 # =====================================================
 # Users storage (users.json)
 # =====================================================
@@ -163,69 +217,65 @@ PRICING_RULES = {
 }
 
 # =====================================================
-# ПРОДВИНУТАЯ СИСТЕМА ПРОМОКОДОВ
+# PROMO CODES (persisted)
 # =====================================================
-PROMO_CODES = {
-    "PROMO10": {
-        "discount": 10,
-        "expires": "2025-04-01",
-        "limit": 50,
-        "used": 0
-    },
-    "STUB5": {
-        "discount": 5,
-        "expires": "2025-12-31",
-        "limit": 100,
-        "used": 0
-    },
-    "WELCOME20": {
-        "discount": 20,
-        "expires": "2025-03-01",
-        "limit": 30,
-        "used": 0
-    }
-}
+PROMO_CODES = load_json(PROMO_PATH, {})
+# встроенный авто промо на 5%: можно вводить "5" или "5%"
+PROMO_CODES.setdefault("AUTO5", {"discount": 5, "expires": None, "limit": 10**9, "used": 0})
+save_json(PROMO_PATH, PROMO_CODES)
 
-def validate_promo(code):
-    """Проверка промокода: срок действия, лимит"""
-    promo = PROMO_CODES.get(code.upper())
+def _parse_expire(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s)
+    except Exception:
+        return None
+
+def validate_promo(code: str):
+    """returns (discount:int|None, error:str|None)"""
+    if not code:
+        return None, "нет промокода"
+    raw = code.strip().upper()
+    if raw in ("5", "5%"):
+        raw = "AUTO5"
+
+    promo = PROMO_CODES.get(raw)
     if not promo:
         return None, "❌ Промокод не найден"
 
-    # Проверка срока действия
-    if promo.get("expires"):
-        try:
-            exp = datetime.fromisoformat(promo["expires"])
-            if datetime.now() > exp:
-                return None, "❌ Промокод истёк"
-        except:
-            pass
+    exp = _parse_expire(promo.get("expires"))
+    if exp and datetime.now() > exp:
+        return None, "❌ Промокод истёк"
 
-    # Проверка лимита
-    if promo["used"] >= promo["limit"]:
+    limit = int(promo.get("limit") or 0)
+    used = int(promo.get("used") or 0)
+    if limit and used >= limit:
         return None, "❌ Лимит использований исчерпан"
 
-    return promo["discount"], None
+    disc = int(promo.get("discount") or 0)
+    if disc <= 0 or disc >= 100:
+        return None, "❌ Некорректная скидка в промокоде"
 
-def use_promo(code):
-    """Применить промокод (увеличить счетчик использований)"""
-    code = code.upper()
-    if code in PROMO_CODES:
-        PROMO_CODES[code]["used"] += 1
-        # Сохраняем обновленные промокоды в файл (опционально)
-        promo_path = Path("promo_codes.json")
-        promo_path.write_text(json.dumps(PROMO_CODES, ensure_ascii=False, indent=2), encoding="utf-8")
-        return True
-    return False
+    return disc, None
 
-# Загружаем сохраненные промокоды, если есть
-promo_path = Path("promo_codes.json")
-if promo_path.exists():
-    try:
-        loaded = json.loads(promo_path.read_text(encoding="utf-8"))
-        PROMO_CODES.update(loaded)
-    except:
-        pass
+def use_promo(code: str):
+    raw = (code or "").strip().upper()
+    if raw in ("5", "5%"):
+        raw = "AUTO5"
+    if raw not in PROMO_CODES:
+        return False
+    PROMO_CODES[raw]["used"] = int(PROMO_CODES[raw].get("used") or 0) + 1
+    save_json(PROMO_PATH, PROMO_CODES)
+    return True
+
+def calc_promo_discount(price: int, promo: str):
+    """Считает цену со скидкой, НЕ тратит промокод."""
+    disc, err = validate_promo(promo)
+    if disc is None:
+        return price, 0, err
+    new_price = int(round(price * (100 - disc) / 100))
+    return new_price, disc, None
 
 # =====================================================
 # Keyboards
@@ -302,6 +352,8 @@ def admin_panel_keyboard():
             [KeyboardButton("📩 Выдано")],
             [KeyboardButton("💰 Выставить цену")],
             [KeyboardButton("💬 Ответ клиенту")],
+            [KeyboardButton("➕ Добавить товар"), KeyboardButton("➖ Удалить товар")],
+            [KeyboardButton("🎟➕ Добавить промокод"), KeyboardButton("🎟➖ Удалить промокод")],
             [KeyboardButton("📊 Статистика")],
             [KeyboardButton("📢 Рассылка")],
             [KeyboardButton("🚫 Забанить"), KeyboardButton("♻ Разбанить")],
@@ -359,8 +411,11 @@ def calc_suggested_price(product_key: str, volume_text: str):
     return price, f"{qty} {unit}(ов) × {per_unit} сом (мин {minimum})"
 
 def apply_promo(price: int, promo: str):
+    """Считает цену со скидкой, НЕ тратит промокод (тратим в confirm)."""
     if not promo:
         return price, 0
+    price2, pct, _err = calc_promo_discount(int(price), promo)
+    return price2, pct
     
     discount, error = validate_promo(promo)
     if discount:
@@ -393,37 +448,40 @@ def last_order_for_user(user_id: int):
 # =====================================================
 # Фоновая задача: напоминание об оплате
 # =====================================================
-async def unpaid_reminder_job(context: ContextTypes.DEFAULT_TYPE):
-    """JobQueue задача: проверяет неоплаченные заказы и напоминает"""
-    try:
-        now = datetime.now()
-        orders_updated = False
-        
-        for oid, order in ORDERS_DB["orders"].items():
-            if order.get("status") == "priced":
-                created = parse_iso(order.get("created_at"))
-                if created and (now - created).total_seconds() > 10800:  # 3 часа
-                    user_id = order.get("user_id")
-                    if user_id:
-                        try:
-                            await context.bot.send_message(
-                                user_id,
-                                f"⏰ Напоминание!\n\n"
-                                f"Заказ №{oid} ещё не оплачен.\n\n"
-                                f"🎁 Если оплатите сегодня — дам скидку 5%!\n"
-                                f"Напишите «поддержка» и укажите номер заказа."
-                            )
-                            order["status"] = "reminded"
-                            order["updated_at"] = now_iso()
-                            orders_updated = True
-                        except Exception as e:
-                            logging.error(f"Ошибка при отправке напоминания: {e}")
-        
-        if orders_updated:
-            save_orders(ORDERS_DB)
+async def unpaid_reminder(app):
+    """Каждый час проверяет неоплаченные заказы и напоминает"""
+    while True:
+        try:
+            now = datetime.now()
+            orders_updated = False
             
-    except Exception as e:
-        logging.error(f"Ошибка в unpaid_reminder_job: {e}")
+            for oid, order in ORDERS_DB["orders"].items():
+                if order.get("status") == "priced":
+                    created = parse_iso(order.get("created_at"))
+                    if created and (now - created).total_seconds() > 10800:  # 3 часа
+                        user_id = order.get("user_id")
+                        if user_id:
+                            try:
+                                await app.bot.send_message(
+                                    user_id,
+                                    f"⏰ Напоминание!\n\n"
+                                    f"Заказ №{oid} ещё не оплачен.\n\n"
+                                    f"🎁 Если оплатите сегодня — дам скидку 5%!\n"
+                                    f"Напишите «поддержка» и укажите номер заказа."
+                                )
+                                order["status"] = "reminded"
+                                order["updated_at"] = now_iso()
+                                orders_updated = True
+                            except Exception as e:
+                                logging.error(f"Ошибка при отправке напоминания: {e}")
+            
+            if orders_updated:
+                save_orders(ORDERS_DB)
+                
+        except Exception as e:
+            logging.error(f"Ошибка в unpaid_reminder: {e}")
+            
+        await asyncio.sleep(3600)  # Проверка каждый час
 
 # =====================================================
 # Handlers: start + user
@@ -552,7 +610,15 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         promo = form_data.get("promo", "").strip()
         promo = "" if promo.lower() in ("нет", "no", "-") else promo.upper()
 
+        urgent, urgent_fee, hours_left = urgency_fee_from_deadline(deadline)
+
         suggested_price, breakdown = calc_suggested_price(product_key, volume)
+        if isinstance(suggested_price, int) and urgent_fee:
+            suggested_price += urgent_fee
+            breakdown = (breakdown or "").strip()
+            extra = f"+{urgent_fee} сом (срочно)"
+            breakdown = (breakdown + " | " + extra) if breakdown else extra
+
         if suggested_price is not None:
             sp2, pct = apply_promo(suggested_price, promo)
         else:
@@ -576,6 +642,9 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
             },
             "promo": promo if promo else None,
             "promo_pct": pct,
+            "urgent": urgent,
+            "urgent_fee": urgent_fee,
+            "urgent_hours_left": hours_left,
             "suggested_price": sp2,
             "suggested_breakdown": breakdown,
             "created_at": now_iso(),
@@ -633,6 +702,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user_text:
         return
     lower_text = user_text.lower()
+    is_admin_user = is_admin(update)
 
     # --- Проверка бана ---
     user_id = update.effective_user.id
@@ -640,7 +710,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ban_data = BANS.get(str(user_id))
 
-    if ban_data:
+    if ban_data and (not is_admin_user):
         if ban_data["type"] == "perm":
             reason = ban_data.get("reason", "без причины")
             await update.message.reply_text(
@@ -665,55 +735,57 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_bans(BANS)
 
     # --- Анти-спам с прогрессивным баном ---
-    history = SPAM_TRACKER.get(user_id, [])
-    history = [t for t in history if (now - t).total_seconds() < SPAM_SECONDS]
-    history.append(now)
-    SPAM_TRACKER[user_id] = history
-
-    if len(history) > SPAM_LIMIT:
-        strikes = BANS.get(str(user_id), {}).get("strikes", 0) + 1
-
-        if strikes > len(BAN_STEPS):
-            # PERM BAN
+    if not is_admin_user:
+        history = SPAM_TRACKER.get(user_id, [])
+        history = [t for t in history if (now - t).total_seconds() < SPAM_SECONDS]
+        history.append(now)
+        SPAM_TRACKER[user_id] = history
+        
+        if len(history) > SPAM_LIMIT:
+            strikes = BANS.get(str(user_id), {}).get("strikes", 0) + 1
+        
+            if strikes > len(BAN_STEPS):
+                # PERM BAN
+                BANS[str(user_id)] = {
+                    "type": "perm",
+                    "reason": "спам",
+                    "strikes": strikes
+                }
+                save_bans(BANS)
+        
+                await update.message.reply_text(
+                    "🚫 Вы навсегда заблокированы.\n"
+                    "Причина: спам\n\n"
+                    "Если ошибка — @slt_nv"
+                )
+        
+                # уведомление админу
+                if ADMIN_ID_INT:
+                    await context.bot.send_message(
+                        ADMIN_ID_INT,
+                        f"🚫 PERM BAN\nUser ID: {user_id}\nПричина: спам"
+                    )
+                return
+        
+            minutes = BAN_STEPS[strikes - 1]
+        
             BANS[str(user_id)] = {
-                "type": "perm",
+                "type": "temp",
+                "until": (now + timedelta(minutes=minutes)).isoformat(),
                 "reason": "спам",
                 "strikes": strikes
             }
             save_bans(BANS)
-
+        
             await update.message.reply_text(
-                "🚫 Вы навсегда заблокированы.\n"
-                "Причина: спам\n\n"
-                "Если ошибка — @slt_nv"
+                f"🚫 Вы заблокированы за спам.\n"
+                f"Срок: {minutes} минут.\n\n"
+                f"Если ошибка — @slt_nv"
             )
-
-            # уведомление админу
-            if ADMIN_ID_INT:
-                await context.bot.send_message(
-                    ADMIN_ID_INT,
-                    f"🚫 PERM BAN\nUser ID: {user_id}\nПричина: спам"
-                )
             return
-
-        minutes = BAN_STEPS[strikes - 1]
-
-        BANS[str(user_id)] = {
-            "type": "temp",
-            "until": (now + timedelta(minutes=minutes)).isoformat(),
-            "reason": "спам",
-            "strikes": strikes
-        }
-        save_bans(BANS)
-
-        await update.message.reply_text(
-            f"🚫 Вы заблокированы за спам.\n"
-            f"Срок: {minutes} минут.\n\n"
-            f"Если ошибка — @slt_nv"
-        )
-        return
-
-    # ================= ОТПРАВКА ФАЙЛА ПОКУПАТЕЛЮ =================
+        
+        
+# ================= ОТПРАВКА ФАЙЛА ПОКУПАТЕЛЮ =================
     if is_admin(update) and context.user_data.get("send_file_order"):
         oid = context.user_data.get("send_file_order")
         order = ORDERS_DB.get("orders", {}).get(oid)
@@ -855,6 +927,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["admin_action"] = "unban_spam"
             await update.message.reply_text("Введите USER_ID для снятия спам-бана:")
             return
+        if user_text == "➕ Добавить товар":
+            context.user_data["admin_action"] = "add_product"
+            await update.message.reply_text(
+                "Формат:\nkey|Название|type(ready/individual)|price(если ready)|delivery_doc(если ready)\n"
+                "Пример:\nnewpack|📦 Новый комплект|ready|399|delivery_newpack.txt"
+            )
+            return
+
+        if user_text == "➖ Удалить товар":
+            context.user_data["admin_action"] = "del_product"
+            await update.message.reply_text("Введите key товара (например: kahoot):")
+            return
+
+        if user_text == "🎟➕ Добавить промокод":
+            context.user_data["admin_action"] = "add_promo"
+            await update.message.reply_text(
+                "Формат:\nCODE|DISCOUNT|YYYY-MM-DD(или пусто)|LIMIT\n"
+                "Пример:\nSPRING10|10|2026-04-01|100"
+            )
+            return
+
+        if user_text == "🎟➖ Удалить промокод":
+            context.user_data["admin_action"] = "del_promo"
+            await update.message.reply_text("Введите CODE промокода:")
+            return
+
 
         # обработка ввода после кнопки
         action = context.user_data.get("admin_action")
@@ -980,6 +1078,73 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     await update.message.reply_text("Пользователь не забанен.")
 
+                context.user_data["admin_action"] = None
+                return
+
+            
+            if action == "add_product":
+                parts = [p.strip() for p in user_text.split("|")]
+                if len(parts) < 3:
+                    await update.message.reply_text("Формат неверный. Попробуйте снова.")
+                    return
+                key = parts[0]
+                title = parts[1]
+                ptype = parts[2].lower()
+                if ptype not in ("ready", "individual"):
+                    await update.message.reply_text("type должен быть ready или individual.")
+                    return
+                prod = {"title": title, "type": ptype}
+                if ptype == "ready":
+                    price = extract_first_int(parts[3] if len(parts) > 3 else "") or 0
+                    delivery_doc = parts[4] if len(parts) > 4 else ""
+                    prod["price"] = int(price)
+                    if delivery_doc:
+                        prod["delivery_doc"] = delivery_doc
+                PRODUCTS[key] = prod
+                save_json(PRODUCTS_PATH, PRODUCTS)
+                await update.message.reply_text("✅ Товар добавлен.", reply_markup=admin_panel_keyboard())
+                context.user_data["admin_action"] = None
+                return
+
+            if action == "del_product":
+                key = user_text.strip()
+                if key in PRODUCTS:
+                    PRODUCTS.pop(key, None)
+                    save_json(PRODUCTS_PATH, PRODUCTS)
+                    await update.message.reply_text("✅ Товар удалён.", reply_markup=admin_panel_keyboard())
+                else:
+                    await update.message.reply_text("❌ Такой key не найден.", reply_markup=admin_panel_keyboard())
+                context.user_data["admin_action"] = None
+                return
+
+            if action == "add_promo":
+                parts = [p.strip() for p in user_text.split("|")]
+                if len(parts) < 2:
+                    await update.message.reply_text("Формат: CODE|DISCOUNT|YYYY-MM-DD|LIMIT")
+                    return
+                code = parts[0].upper()
+                disc = extract_first_int(parts[1])
+                if disc is None or disc <= 0 or disc >= 100:
+                    await update.message.reply_text("DISCOUNT должен быть числом 1..99")
+                    return
+                exp = parts[2] if len(parts) > 2 and parts[2] else None
+                lim = extract_first_int(parts[3]) if len(parts) > 3 else 10**9
+                PROMO_CODES[code] = {"discount": int(disc), "expires": exp, "limit": int(lim or 0), "used": 0}
+                save_json(PROMO_PATH, PROMO_CODES)
+                await update.message.reply_text("✅ Промокод добавлен.", reply_markup=admin_panel_keyboard())
+                context.user_data["admin_action"] = None
+                return
+
+            if action == "del_promo":
+                code = user_text.strip().upper()
+                if code in ("AUTO5",):
+                    await update.message.reply_text("⚠️ AUTO5 встроенный, нельзя удалить.", reply_markup=admin_panel_keyboard())
+                elif code in PROMO_CODES:
+                    PROMO_CODES.pop(code, None)
+                    save_json(PROMO_PATH, PROMO_CODES)
+                    await update.message.reply_text("✅ Промокод удалён.", reply_markup=admin_panel_keyboard())
+                else:
+                    await update.message.reply_text("❌ Не найден.", reply_markup=admin_panel_keyboard())
                 context.user_data["admin_action"] = None
                 return
 
@@ -1415,7 +1580,11 @@ async def setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     promo = (order.get("promo") or "").upper()
-    price2, pct = apply_promo(price, promo) if price else (price, 0)
+    price2, pct = apply_promo(int(price), promo) if price else (int(price), 0)
+
+    urgent_fee = int(order.get("urgent_fee") or 0)
+    if urgent_fee:
+        price2 = int(price2) + urgent_fee
 
     order["price"] = int(price2)
     order["promo_pct"] = pct
@@ -1595,6 +1764,11 @@ async def _confirm_order(context: ContextTypes.DEFAULT_TYPE, oid: str, notify_ad
             await admin_message.reply_text(f"Заказ №{oid} не в статусе pending.")
         return
 
+    # фиксируем промокод только после подтверждения оплаты
+    promo_used = (order.get("promo") or "").strip()
+    if promo_used:
+        use_promo(promo_used)
+
     user_id = order.get("user_id")
     product_key = order.get("product")
     product = PRODUCTS.get(product_key) if product_key else None
@@ -1718,10 +1892,10 @@ def main():
     # text
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Запускаем фоновую задачу напоминаний через JobQueue
-    job_queue = app.job_queue
-    if job_queue:
-        job_queue.run_repeating(unpaid_reminder_job, interval=3600, first=3600)
+    # Запускаем фоновую задачу напоминаний
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.create_task(unpaid_reminder(app))
 
     print("✅ Бот с профессиональными функциями запущен")
     print("👨‍💼 Для админа: /admin")
