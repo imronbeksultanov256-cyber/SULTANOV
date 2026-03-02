@@ -34,7 +34,7 @@ if not TELEGRAM_BOT_TOKEN:
     print("❌ TELEGRAM_BOT_TOKEN не найден")
     exit(1)
 
-MBANK_REKV_FALLBACK = os.getenv("MBANK_REKV", "+996999888332 Имронбек С.")
+MBANK_REKV_FALLBACK = os.getenv("MBANK_REKV", "")
 
 # =====================================================
 # BAN SYSTEM
@@ -191,32 +191,19 @@ USERS_DB = load_users()
 # =====================================================
 # Products / Catalog
 # =====================================================
-PRODUCTS_PATH = Path("products.json")
-
-def load_products():
-    if not PRODUCTS_PATH.exists():
-        return {
-            "gistology_ready": {
-                "title": "📚 СРС по гистологии (1–2 модуль) — комплект",
-                "type": "ready",
-                "price": 499,
-                "delivery_doc": "delivery_gistology_ready.txt",
-            },
-            "kahoot": {"title": "🧠 Kahoot (индивидуально)", "type": "individual"},
-            "srs": {"title": "📚 СРС (самостоятельная работа)", "type": "individual"},
-            "referat": {"title": "📄 Реферат", "type": "individual"},
-            "doklad": {"title": "📘 Доклад", "type": "individual"},
-            "presentation": {"title": "📊 Презентация (PowerPoint)", "type": "individual"},
-        }
-    try:
-        return json.loads(PRODUCTS_PATH.read_text(encoding="utf-8"))
-    except:
-        return {}
-
-def save_products(products):
-    PRODUCTS_PATH.write_text(json.dumps(products, ensure_ascii=False, indent=2), encoding="utf-8")
-
-PRODUCTS = load_products()
+PRODUCTS = {
+    "gistology_ready": {
+        "title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+        "type": "ready",
+        "price": 499,
+        "delivery_doc": "delivery_gistology_ready.txt",
+    },
+    "kahoot": {"title": "🧠 Kahoot (индивидуально)", "type": "individual"},
+    "srs": {"title": "📚 СРС (самостоятельная работа)", "type": "individual"},
+    "referat": {"title": "📄 Реферат", "type": "individual"},
+    "doklad": {"title": "📘 Доклад", "type": "individual"},
+    "presentation": {"title": "📊 Презентация (PowerPoint)", "type": "individual"},
+}
 
 # =====================================================
 # Pricing templates (авторасчёт)
@@ -232,23 +219,9 @@ PRICING_RULES = {
 # =====================================================
 # PROMO CODES (persisted)
 # =====================================================
-PROMO_PATH = Path("promo_codes.json")
-
-def load_json(path, default):
-    if not path.exists():
-        return default
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except:
-        return default
-
-def save_json(path, data):
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
 PROMO_CODES = load_json(PROMO_PATH, {})
 # встроенный авто промо на 5%: можно вводить "5" или "5%"
-if "AUTO5" not in PROMO_CODES:
-    PROMO_CODES["AUTO5"] = {"discount": 5, "expires": None, "limit": 10**9, "used": 0}
+PROMO_CODES.setdefault("AUTO5", {"discount": 5, "expires": None, "limit": 10**9, "used": 0})
 save_json(PROMO_PATH, PROMO_CODES)
 
 def _parse_expire(s):
@@ -303,13 +276,6 @@ def calc_promo_discount(price: int, promo: str):
         return price, 0, err
     new_price = int(round(price * (100 - disc) / 100))
     return new_price, disc, None
-
-def apply_promo(price: int, promo: str):
-    """Считает цену со скидкой, НЕ тратит промокод (тратим в confirm)."""
-    if not promo:
-        return price, 0
-    price2, pct, _err = calc_promo_discount(int(price), promo)
-    return price2, pct
 
 # =====================================================
 # Keyboards
@@ -444,10 +410,19 @@ def calc_suggested_price(product_key: str, volume_text: str):
     price = max(minimum, qty * per_unit)
     return price, f"{qty} {unit}(ов) × {per_unit} сом (мин {minimum})"
 
-def exit_support_mode(context: ContextTypes.DEFAULT_TYPE):
-    """Выключает режим поддержки"""
-    context.user_data["support_mode"] = False
-    context.user_data["support_order_id"] = None
+def apply_promo(price: int, promo: str):
+    """Считает цену со скидкой, НЕ тратит промокод (тратим в confirm)."""
+    if not promo:
+        return price, 0
+    price2, pct, _err = calc_promo_discount(int(price), promo)
+    return price2, pct
+    
+    discount, error = validate_promo(promo)
+    if discount:
+        use_promo(promo)
+        new_price = int(round(price * (100 - discount) / 100))
+        return new_price, discount
+    return price, 0
 
 def order_status_human(status: str):
     mapping = {
@@ -473,37 +448,40 @@ def last_order_for_user(user_id: int):
 # =====================================================
 # Фоновая задача: напоминание об оплате
 # =====================================================
-async def unpaid_reminder_job(context: ContextTypes.DEFAULT_TYPE):
-    """Job для напоминания об оплате"""
-    try:
-        now = datetime.now()
-        orders_updated = False
-        
-        for oid, order in ORDERS_DB["orders"].items():
-            if order.get("status") == "priced":
-                created = parse_iso(order.get("created_at"))
-                if created and (now - created).total_seconds() > 10800:  # 3 часа
-                    user_id = order.get("user_id")
-                    if user_id:
-                        try:
-                            await context.bot.send_message(
-                                user_id,
-                                f"⏰ Напоминание!\n\n"
-                                f"Заказ №{oid} ещё не оплачен.\n\n"
-                                f"🎁 Если оплатите сегодня — дам скидку 5%!\n"
-                                f"Напишите «поддержка» и укажите номер заказа."
-                            )
-                            order["status"] = "reminded"
-                            order["updated_at"] = now_iso()
-                            orders_updated = True
-                        except Exception as e:
-                            logging.error(f"Ошибка при отправке напоминания: {e}")
-        
-        if orders_updated:
-            save_orders(ORDERS_DB)
+async def unpaid_reminder(app):
+    """Каждый час проверяет неоплаченные заказы и напоминает"""
+    while True:
+        try:
+            now = datetime.now()
+            orders_updated = False
+            
+            for oid, order in ORDERS_DB["orders"].items():
+                if order.get("status") == "priced":
+                    created = parse_iso(order.get("created_at"))
+                    if created and (now - created).total_seconds() > 10800:  # 3 часа
+                        user_id = order.get("user_id")
+                        if user_id:
+                            try:
+                                await app.bot.send_message(
+                                    user_id,
+                                    f"⏰ Напоминание!\n\n"
+                                    f"Заказ №{oid} ещё не оплачен.\n\n"
+                                    f"🎁 Если оплатите сегодня — дам скидку 5%!\n"
+                                    f"Напишите «поддержка» и укажите номер заказа."
+                                )
+                                order["status"] = "reminded"
+                                order["updated_at"] = now_iso()
+                                orders_updated = True
+                            except Exception as e:
+                                logging.error(f"Ошибка при отправке напоминания: {e}")
+            
+            if orders_updated:
+                save_orders(ORDERS_DB)
                 
-    except Exception as e:
-        logging.error(f"Ошибка в unpaid_reminder_job: {e}")
+        except Exception as e:
+            logging.error(f"Ошибка в unpaid_reminder: {e}")
+            
+        await asyncio.sleep(3600)  # Проверка каждый час
 
 # =====================================================
 # Handlers: start + user
@@ -599,9 +577,6 @@ def form_reset(context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("selected_product", None)
 
 async def form_start(update: Update, context: ContextTypes.DEFAULT_TYPE, product_key: str):
-    # Выходим из режима поддержки
-    exit_support_mode(context)
-    
     context.user_data["selected_product"] = product_key
     context.user_data["form_step"] = 0
     context.user_data["form_data"] = {}
@@ -809,7 +784,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-    # ================= ОТПРАВКА ФАЙЛА ПОКУПАТЕЛЮ =================
+        
+# ================= ОТПРАВКА ФАЙЛА ПОКУПАТЕЛЮ =================
     if is_admin(update) and context.user_data.get("send_file_order"):
         oid = context.user_data.get("send_file_order")
         order = ORDERS_DB.get("orders", {}).get(oid)
@@ -1224,13 +1200,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user_text == "🛒 Покупка":
         # 🔥 отключаем поддержку если была включена
-        exit_support_mode(context)
+        context.user_data["support_mode"] = False
+        context.user_data["support_order_id"] = None
         await update.message.reply_text("🛒 Раздел покупок:", reply_markup=buy_menu_keyboard())
         return
 
     if user_text == "📂 Каталог":
         # 🔥 отключаем поддержку если была включена
-        exit_support_mode(context)
+        context.user_data["support_mode"] = False
+        context.user_data["support_order_id"] = None
         await update.message.reply_text("📦 Выберите товар/услугу:", reply_markup=catalog_keyboard())
         return
 
@@ -1280,7 +1258,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user_text == "💳 Оплата":
-        txt = get_doc_by_name("payment.txt") or f"💳 Реквизиты для оплаты:\n\n{MBANK_REKV_FALLBACK}"
+        txt = get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK
         await update.message.reply_text(txt or "Добавь knowledge/payment.txt → python index_kb.py")
         return
 
@@ -1355,7 +1333,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user_text == "❌ Закрыть поддержку":
-        exit_support_mode(context)
+        context.user_data["support_mode"] = False
+        context.user_data["support_order_id"] = None
         await update.message.reply_text("✅ Поддержка закрыта. Возвращаю меню.", reply_markup=main_menu_keyboard())
         return
 
@@ -1379,7 +1358,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_key = key_from_button_text(user_text)
     if product_key:
         # 🔥 отключаем поддержку если была включена
-        exit_support_mode(context)
+        context.user_data["support_mode"] = False
+        context.user_data["support_order_id"] = None
         
         promo_default = context.user_data.get("promo_default", "")
         if product_key == "gistology_ready":
@@ -1405,7 +1385,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             save_orders(ORDERS_DB)
 
-            pay = get_doc_by_name("payment.txt") or f"💳 Реквизиты для оплаты:\n\n{MBANK_REKV_FALLBACK}"
+            pay = get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK or "💳 Оплата через MBank: <укажи реквизиты>"
             promo_line = f"\n🎟 Промокод: {promo_default} (-{pct}%)" if promo_default and pct else ""
             await update.message.reply_text(
                 (
@@ -1612,7 +1592,7 @@ async def setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     order["updated_at"] = now_iso()
     save_orders(ORDERS_DB)
 
-    pay = get_doc_by_name("payment.txt") or f"💳 Реквизиты для оплаты:\n\n{MBANK_REKV_FALLBACK}"
+    pay = get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK or "💳 Оплата через MBank: <укажи реквизиты>"
     promo_line = f"\n🎟 Промокод: {promo} (-{pct}%)" if promo and pct else ""
 
     await context.bot.send_message(
@@ -1912,10 +1892,10 @@ def main():
     # text
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Запускаем фоновую задачу напоминаний через JobQueue
-    job_queue = app.job_queue
-    if job_queue:
-        job_queue.run_repeating(unpaid_reminder_job, interval=3600, first=3600)
+    # Запускаем фоновую задачу напоминаний
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.create_task(unpaid_reminder(app))
 
     print("✅ Бот с профессиональными функциями запущен")
     print("👨‍💼 Для админа: /admin")
@@ -1926,7 +1906,6 @@ def main():
     print("👮‍♂️ Бан: кнопка в админке")
     print("♻ Разбан: кнопка в админке")
     print("🧹 Снять бан (спам): только для авто-спама")
-    print("💳 Реквизиты оплаты: +996999888332 Имронбек С.")
     app.run_polling()
 
 if __name__ == "__main__":
