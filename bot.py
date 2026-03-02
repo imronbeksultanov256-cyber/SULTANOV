@@ -37,6 +37,24 @@ if not TELEGRAM_BOT_TOKEN:
 MBANK_REKV_FALLBACK = os.getenv("MBANK_REKV", "")
 
 # =====================================================
+# JSON helpers
+# =====================================================
+def load_json(filepath, default=None):
+    """Загружает JSON из файла, если файл не существует или ошибка - возвращает default"""
+    path = Path(filepath)
+    if not path.exists():
+        return default if default is not None else {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return default if default is not None else {}
+
+def save_json(filepath, data):
+    """Сохраняет данные в JSON файл"""
+    path = Path(filepath)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+# =====================================================
 # BAN SYSTEM
 # =====================================================
 BAN_PATH = Path("bans.json")
@@ -73,7 +91,7 @@ def load_kb_items():
     if not KB_PATH.exists():
         return []
     try:
-        data = json.loads(KB_PATH.read_text(encoding="utf-8"))
+        data = json.load(KB_PATH.read_text(encoding="utf-8"))
         return data.get("items", [])
     except Exception:
         return []
@@ -191,19 +209,29 @@ USERS_DB = load_users()
 # =====================================================
 # Products / Catalog
 # =====================================================
-PRODUCTS = {
-    "gistology_ready": {
-        "title": "📚 СРС по гистологии (1–2 модуль) — комплект",
-        "type": "ready",
-        "price": 499,
-        "delivery_doc": "delivery_gistology_ready.txt",
-    },
-    "kahoot": {"title": "🧠 Kahoot (индивидуально)", "type": "individual"},
-    "srs": {"title": "📚 СРС (самостоятельная работа)", "type": "individual"},
-    "referat": {"title": "📄 Реферат", "type": "individual"},
-    "doklad": {"title": "📘 Доклад", "type": "individual"},
-    "presentation": {"title": "📊 Презентация (PowerPoint)", "type": "individual"},
-}
+PRODUCTS_PATH = Path("products.json")
+
+def load_products():
+    if not PRODUCTS_PATH.exists():
+        # Дефолтные товары
+        default_products = {
+            "gistology_ready": {
+                "title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+                "type": "ready",
+                "price": 499,
+                "delivery_doc": "delivery_gistology_ready.txt",
+            },
+            "kahoot": {"title": "🧠 Kahoot (индивидуально)", "type": "individual"},
+            "srs": {"title": "📚 СРС (самостоятельная работа)", "type": "individual"},
+            "referat": {"title": "📄 Реферат", "type": "individual"},
+            "doklad": {"title": "📘 Доклад", "type": "individual"},
+            "presentation": {"title": "📊 Презентация (PowerPoint)", "type": "individual"},
+        }
+        save_json(PRODUCTS_PATH, default_products)
+        return default_products
+    return load_json(PRODUCTS_PATH, {})
+
+PRODUCTS = load_products()
 
 # =====================================================
 # Pricing templates (авторасчёт)
@@ -219,10 +247,12 @@ PRICING_RULES = {
 # =====================================================
 # PROMO CODES (persisted)
 # =====================================================
+PROMO_PATH = Path("promo.json")
 PROMO_CODES = load_json(PROMO_PATH, {})
 # встроенный авто промо на 5%: можно вводить "5" или "5%"
-PROMO_CODES.setdefault("AUTO5", {"discount": 5, "expires": None, "limit": 10**9, "used": 0})
-save_json(PROMO_PATH, PROMO_CODES)
+if "AUTO5" not in PROMO_CODES:
+    PROMO_CODES["AUTO5"] = {"discount": 5, "expires": None, "limit": 10**9, "used": 0}
+    save_json(PROMO_PATH, PROMO_CODES)
 
 def _parse_expire(s):
     if not s:
@@ -276,6 +306,13 @@ def calc_promo_discount(price: int, promo: str):
         return price, 0, err
     new_price = int(round(price * (100 - disc) / 100))
     return new_price, disc, None
+
+def apply_promo(price: int, promo: str):
+    """Считает цену со скидкой, НЕ тратит промокод (тратим в confirm)."""
+    if not promo:
+        return price, 0
+    price2, pct, _err = calc_promo_discount(int(price), promo)
+    return price2, pct
 
 # =====================================================
 # Keyboards
@@ -409,20 +446,6 @@ def calc_suggested_price(product_key: str, volume_text: str):
         return minimum, f"минимум {minimum}"
     price = max(minimum, qty * per_unit)
     return price, f"{qty} {unit}(ов) × {per_unit} сом (мин {minimum})"
-
-def apply_promo(price: int, promo: str):
-    """Считает цену со скидкой, НЕ тратит промокод (тратим в confirm)."""
-    if not promo:
-        return price, 0
-    price2, pct, _err = calc_promo_discount(int(price), promo)
-    return price2, pct
-    
-    discount, error = validate_promo(promo)
-    if discount:
-        use_promo(promo)
-        new_price = int(round(price * (100 - discount) / 100))
-        return new_price, discount
-    return price, 0
 
 def order_status_human(status: str):
     mapping = {
@@ -1862,9 +1885,13 @@ async def _reject_order(context: ContextTypes.DEFAULT_TYPE, oid: str, notify_adm
 # =====================================================
 # Main
 # =====================================================
+async def post_init(application: Application):
+    """Запускает фоновую задачу после инициализации приложения"""
+    asyncio.create_task(unpaid_reminder(application))
+
 def main():
     logging.basicConfig(level=logging.INFO)
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    app = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
 
     # user
     app.add_handler(CommandHandler("start", start))
@@ -1891,11 +1918,6 @@ def main():
 
     # text
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Запускаем фоновую задачу напоминаний
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.create_task(unpaid_reminder(app))
 
     print("✅ Бот с профессиональными функциями запущен")
     print("👨‍💼 Для админа: /admin")
