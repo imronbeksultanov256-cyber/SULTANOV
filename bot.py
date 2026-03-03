@@ -931,26 +931,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if user_text == "✅ Подтвердить":
+            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "confirm"
             await update.message.reply_text("Введите номер заказа:")
             return
 
         if user_text == "❌ Отклонить":
+            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "reject"
             await update.message.reply_text("Введите номер заказа:")
             return
 
         if user_text == "🟡 В работу":
+            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "inwork"
             await update.message.reply_text("Введите номер заказа:")
             return
 
         if user_text == "🟢 Готово":
+            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "ready"
             await update.message.reply_text("Введите номер заказа:")
             return
 
         if user_text == "📩 Выдано":
+            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "send_file"
             await update.message.reply_text("Введите номер заказа:")
             return
@@ -1014,16 +1019,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # обработка ввода после кнопки
         action = context.user_data.get("admin_action")
         if action:
-            # Если есть активный заказ, используем его
-            oid = context.user_data.get("active_order")
+            # Если админ ввёл номер в сообщении — используем его, иначе берём active_order
+            parsed_oid = extract_first_int(user_text)
+            oid = parsed_oid if parsed_oid else context.user_data.get("active_order")
 
             if action in ("confirm", "reject", "inwork", "ready", "send_file", "setprice", "reply"):
                 if not oid:
-                    oid = extract_first_int(user_text)
-                    if not oid:
-                        await update.message.reply_text("Введите корректный номер.")
-                        return
-                    context.user_data["active_order"] = str(oid)
+                    await update.message.reply_text("Введите корректный номер.")
+                    return
+                # сохраняем как active_order для следующих шагов (например setprice/reply)
+                context.user_data["active_order"] = str(oid)
 
                 if action in ("confirm", "reject", "inwork", "ready"):
                     context.args = [str(oid)]
@@ -1417,14 +1422,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Выбор формата (для СРС/Доклад/Реферат)
     if context.user_data.get("pending_format_product"):
         pk = context.user_data.get("pending_format_product")
-        if user_text in ("✍️ От руки", "⌨️ Печатно"):
-            context.user_data["work_format"] = "От руки" if user_text == "✍️ От руки" else "Печатно"
-            context.user_data["pending_format_product"] = None
-            await form_start(update, context, pk)
-            promo_default = context.user_data.get("promo_default", "")
-            if promo_default:
-                await update.message.reply_text(f"🎟 У вас активен промокод: {promo_default} (учту в цене).")
+
+        lower_fmt = user_text.strip().lower()
+        if ("от руки" in lower_fmt) or ("рукой" in lower_fmt) or (user_text.strip() == "✍️ От руки"):
+            context.user_data["work_format"] = "От руки"
+        elif ("печат" in lower_fmt) or (user_text.strip() == "⌨️ Печатно"):
+            context.user_data["work_format"] = "Печатно"
+        else:
+            await update.message.reply_text(
+                "✍️ Пожалуйста, выберите формат кнопкой ниже:
+
+• От руки
+• Печатно",
+                reply_markup=work_format_keyboard(),
+            )
             return
+
+        context.user_data["pending_format_product"] = None
+        await form_start(update, context, pk)
+        promo_default = context.user_data.get("promo_default", "")
+        if promo_default:
+            await update.message.reply_text(f"🎟 У вас активен промокод: {promo_default} (учту в цене).")
+        return
 
     # Каталог
     product_key = key_from_button_text(user_text)
