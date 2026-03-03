@@ -1478,7 +1478,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Для СРС/Реферат/Доклад сначала спрашиваем формат (от руки / печатно)
+                # Для СРС/Реферат/Доклад сначала спрашиваем формат (от руки / печатно)
         if product_key in ("srs", "referat", "doklad"):
             context.user_data["pending_format_product"] = product_key
             await update.message.reply_text(
