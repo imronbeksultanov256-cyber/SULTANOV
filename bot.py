@@ -36,6 +36,15 @@ if not TELEGRAM_BOT_TOKEN:
 
 MBANK_REKV_FALLBACK = os.getenv("MBANK_REKV", "")
 
+# Реквизиты для оплаты (всегда показываем в тексте оплаты)
+PAYMENT_REKV_TEXT = (
+    "💳 Оплата (MBank)\n"
+    "Номер: +996999888332\n"
+    "Получатель: Имронбек С.\n"
+    "После оплаты отправьте чек (скрин/фото), чтобы было видно сумму и дату/время."
+)
+
+
 # =====================================================
 # JSON helpers
 # =====================================================
@@ -101,6 +110,15 @@ KB_ITEMS = load_kb_items()
 def get_doc_by_name(filename: str) -> str:
     parts = [it.get("text", "") for it in KB_ITEMS if it.get("source") == filename]
     return ("\n\n".join(parts)).strip()
+
+
+def get_payment_text() -> str:
+    """Возвращает текст оплаты. Реквизиты всегда включены."""
+    extra = (get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK or "").strip()
+    if extra:
+        # если в knowledge уже прописали реквизиты — всё равно оставим наши вверху
+        return PAYMENT_REKV_TEXT + "\n\n" + extra
+    return PAYMENT_REKV_TEXT
 
 # =====================================================
 # Orders storage (orders.json)
@@ -317,14 +335,14 @@ def apply_promo(price: int, promo: str):
 # =====================================================
 # Keyboards
 # =====================================================
-def main_menu_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("🛒 Покупка"), KeyboardButton("ℹ️ Инфо")],
-            [KeyboardButton("🆘 Поддержка"), KeyboardButton("📌 Статус заказа")],
-        ],
-        resize_keyboard=True,
-    )
+def main_menu_keyboard(is_admin_user: bool = False):
+    rows = [
+        [KeyboardButton("🛒 Покупка"), KeyboardButton("ℹ️ Инфо")],
+        [KeyboardButton("🆘 Поддержка"), KeyboardButton("📌 Статус заказа")],
+    ]
+    if is_admin_user:
+        rows.append([KeyboardButton("🛠 Админ панель")])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 def buy_menu_keyboard():
     return ReplyKeyboardMarkup(
@@ -373,6 +391,16 @@ def review_keyboard():
         [
             [KeyboardButton("⭐️ Оставить отзыв")],
             [KeyboardButton("🏠 В меню")],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def work_format_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("✍️ От руки"), KeyboardButton("⌨️ Печатно")],
+            [KeyboardButton("⬅️ Назад")],
         ],
         resize_keyboard=True,
     )
@@ -526,7 +554,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👋 Добро пожаловать в StubHub!\n\n"
         "📚 Здесь можно заказать работу или купить готовый комплект.\n\n"
         "Выберите действие 👇",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard(is_admin(update)),
     )
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -598,13 +626,17 @@ def form_reset(context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("form_step", None)
     context.user_data.pop("form_data", None)
     context.user_data.pop("selected_product", None)
+    context.user_data.pop("work_format", None)
+    context.user_data.pop("pending_format_product", None)
 
 async def form_start(update: Update, context: ContextTypes.DEFAULT_TYPE, product_key: str):
     context.user_data["selected_product"] = product_key
     context.user_data["form_step"] = 0
     context.user_data["form_data"] = {}
+    fmt = context.user_data.get("work_format")
+    fmt_line = f"\n🖊 Формат: {fmt}" if fmt else ""
     await update.message.reply_text(
-        f"✅ Вы выбрали: {PRODUCTS[product_key]['title']}\n\n"
+        f"✅ Вы выбрали: {PRODUCTS[product_key]['title']}" + fmt_line + "\n\n"
         "Заполним короткую форму (4–5 сообщений).",
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -662,6 +694,7 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
                 "volume": volume,
                 "reqs": reqs,
                 "deadline": deadline,
+                "format": context.user_data.get("work_format"),
             },
             "promo": promo if promo else None,
             "promo_pct": pct,
@@ -705,6 +738,7 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
                     f"Требования:\n"
                     f"• Тема: {topic}\n"
                     f"• Объём: {volume}\n"
+                    f"• Формат: {context.user_data.get('work_format') or '—'}\n"
                     f"• Требования: {reqs}\n"
                     f"• Срок: {deadline}\n\n"
                     f"Выставить цену: /setprice {oid} 700"
@@ -870,7 +904,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "🙏 Спасибо за отзыв!\n\nМы ценим ваше мнение 💎",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_keyboard(is_admin_user),
         )
 
         # Отправляем админу
@@ -1209,6 +1243,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("upsell_for_order")
 
     # Навигация
+    if user_text == "🛠 Админ панель" and is_admin_user:
+        await admin_panel(update, context)
+        return
+
     if user_text == "🏠 В меню":
         await update.message.reply_text("🏠 Главное меню:", reply_markup=main_menu_keyboard())
         return
@@ -1281,8 +1319,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user_text == "💳 Оплата":
-        txt = get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK
-        await update.message.reply_text(txt or "Добавь knowledge/payment.txt → python index_kb.py")
+        await update.message.reply_text(get_payment_text())
         return
 
     if user_text == "📦 Выдача":
@@ -1314,7 +1351,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Услуга: {title}\n"
             f"Статус: {st}\n"
             f"Сумма: {format_money(price)}",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_keyboard(is_admin_user),
         )
         return
 
@@ -1377,6 +1414,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Передал менеджеру. Ожидайте ответ.")
         return
 
+    # Выбор формата (для СРС/Доклад/Реферат)
+    if context.user_data.get("pending_format_product"):
+        pk = context.user_data.get("pending_format_product")
+        if user_text in ("✍️ От руки", "⌨️ Печатно"):
+            context.user_data["work_format"] = "От руки" if user_text == "✍️ От руки" else "Печатно"
+            context.user_data["pending_format_product"] = None
+            await form_start(update, context, pk)
+            promo_default = context.user_data.get("promo_default", "")
+            if promo_default:
+                await update.message.reply_text(f"🎟 У вас активен промокод: {promo_default} (учту в цене).")
+            return
+
     # Каталог
     product_key = key_from_button_text(user_text)
     if product_key:
@@ -1408,7 +1457,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             save_orders(ORDERS_DB)
 
-            pay = get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK or "💳 Оплата через MBank: <укажи реквизиты>"
+            pay = get_payment_text()
             promo_line = f"\n🎟 Промокод: {promo_default} (-{pct}%)" if promo_default and pct else ""
             await update.message.reply_text(
                 (
@@ -1419,6 +1468,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"После оплаты нажмите «💳 Я оплатил(а) №{oid}» и отправьте чек."
                 ),
                 reply_markup=payment_keyboard_for_order(str(oid)),
+            )
+            return
+
+        # Для СРС/Реферат/Доклад сначала спрашиваем формат (от руки / печатно)
+        if product_key in ("srs", "referat", "doklad"):
+            context.user_data["pending_format_product"] = product_key
+            await update.message.reply_text(
+                "✍️ Выберите формат выполнения:\n\n"
+                "• От руки\n"
+                "• Печатно",
+                reply_markup=work_format_keyboard(),
             )
             return
 
@@ -1439,7 +1499,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 f"По заказу №{oid} сейчас статус: {order_status_human(order.get('status'))}.\n"
                 "Если нужен менеджер — нажмите «🆘 Поддержка».",
-                reply_markup=main_menu_keyboard(),
+                reply_markup=main_menu_keyboard(is_admin_user),
             )
             return
 
@@ -1455,18 +1515,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Не понял 🤝\n"
         "Откройте «🛒 Покупка» → «📂 Каталог».\n"
         "Или нажмите «🆘 Поддержка».",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard(is_admin_user),
     )
 
 # =====================================================
 # Receipt photo handler
 # =====================================================
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    is_admin_user = is_admin(update)
     oid = context.user_data.get("awaiting_receipt_order_id")
     if not oid:
         await update.message.reply_text(
             "📷 Фото получено.\nЕсли это чек — нажмите кнопку «💳 Я оплатил(а) №...».",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_keyboard(is_admin_user),
         )
         return
 
@@ -1485,7 +1546,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if order.get("status") != "priced":
         await update.message.reply_text(
             f"По заказу №{oid} сейчас статус: {order_status_human(order.get('status'))}.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_keyboard(is_admin_user),
         )
         return
 
@@ -1615,7 +1676,7 @@ async def setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     order["updated_at"] = now_iso()
     save_orders(ORDERS_DB)
 
-    pay = get_doc_by_name("payment.txt") or MBANK_REKV_FALLBACK or "💳 Оплата через MBank: <укажи реквизиты>"
+    pay = get_payment_text()
     promo_line = f"\n🎟 Промокод: {promo} (-{pct}%)" if promo and pct else ""
 
     await context.bot.send_message(
