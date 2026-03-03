@@ -1430,7 +1430,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["work_format"] = "Печатно"
         else:
             await update.message.reply_text(
-                "✍️ Пожалуйста, выберите формат кнопкой ниже:
+              "✍️ Пожалуйста, выберите формат кнопкой ниже:\n"
 
 • От руки
 • Печатно",
