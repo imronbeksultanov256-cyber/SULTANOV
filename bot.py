@@ -143,6 +143,29 @@ def new_order_id() -> int:
     save_orders(ORDERS_DB)
     return ORDERS_DB["last_id"]
 
+# =====================================================
+# Support tickets storage (tickets.json)
+# =====================================================
+TICKETS_PATH = Path("tickets.json")
+
+def load_tickets():
+    if not TICKETS_PATH.exists():
+        return {"last_id": 0, "tickets": {}}
+    try:
+        return json.loads(TICKETS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {"last_id": 0, "tickets": {}}
+
+def save_tickets(db):
+    TICKETS_PATH.write_text(json.dumps(db, ensure_ascii=False, indent=2), encoding="utf-8")
+
+TICKETS_DB = load_tickets()
+
+def new_ticket_id() -> int:
+    TICKETS_DB["last_id"] = int(TICKETS_DB.get("last_id", 0)) + 1
+    save_tickets(TICKETS_DB)
+    return TICKETS_DB["last_id"]
+
 def now_iso():
     return datetime.now().isoformat(timespec="seconds")
 
@@ -337,7 +360,7 @@ def apply_promo(price: int, promo: str):
 def exit_support_mode(context: ContextTypes.DEFAULT_TYPE):
     """Выключает режим поддержки"""
     context.user_data["support_mode"] = False
-    context.user_data["support_order_id"] = None
+    context.user_data["support_ticket_id"] = None
 
 # =====================================================
 # Keyboards
@@ -718,7 +741,7 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         save_orders(ORDERS_DB)
 
         await update.message.reply_text(
-            f"✅ Заявка принята! Номер: №{oid}\n\n"
+            f"✅ Заявка принята! Номер заказа: №{oid}\n\n"
             "Сейчас рассчитаю стоимость и напишу вам.\n"
             "Если нужно срочно — нажмите «🆘 Поддержка».",
             reply_markup=buy_menu_keyboard(),
@@ -805,16 +828,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    try:
-        await update.message.forward(chat_id=ADMIN_ID_INT)
-    except Exception:
-        pass
-
-    await context.bot.send_message(
+    # Отправляем фото с caption вместо forward
+    photo_id = update.message.photo[-1].file_id
+    await context.bot.send_photo(
         chat_id=ADMIN_ID_INT,
-        text=(
-            f"🧾 Новый чек (фото)\n"
-            f"№{oid}\n"
+        photo=photo_id,
+        caption=(
+            f"🧾 Чек по заказу №{oid}\n"
             f"Клиент: {order.get('user_label')}\n"
             f"User ID: {order.get('user_id')}\n"
             f"Товар/услуга: {order.get('product_title')}\n"
@@ -865,16 +885,13 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    try:
-        await update.message.forward(chat_id=ADMIN_ID_INT)
-    except Exception:
-        pass
-
-    await context.bot.send_message(
+    # Отправляем документ с caption
+    document_id = update.message.document.file_id
+    await context.bot.send_document(
         chat_id=ADMIN_ID_INT,
-        text=(
-            f"🧾 Новый чек (документ)\n"
-            f"№{oid}\n"
+        document=document_id,
+        caption=(
+            f"🧾 Чек по заказу №{oid}\n"
             f"Клиент: {order.get('user_label')}\n"
             f"User ID: {order.get('user_id')}\n"
             f"Товар/услуга: {order.get('product_title')}\n"
@@ -1479,7 +1496,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         price = order.get("price")
         await update.message.reply_text(
             f"📌 Ваш последний заказ:\n"
-            f"№{oid}\n"
+            f"Номер заказа: №{oid}\n"
             f"Услуга: {title}\n"
             f"Статус: {st}\n"
             f"Сумма: {format_money(price)}",
@@ -1489,26 +1506,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Поддержка
     if user_text == "🆘 Поддержка" or "менеджер" in lower_text:
-        oid = new_order_id()
+        tid = new_ticket_id()
         u = update.effective_user
-        ORDERS_DB["orders"][str(oid)] = {
-            "status": "support",
+
+        TICKETS_DB["tickets"][str(tid)] = {
+            "status": "open",
             "user_id": u.id if u else None,
             "user_label": user_label(update),
-            "product": context.user_data.get("selected_product"),
-            "price": None,
-            "details": "support_ticket",
             "created_at": now_iso(),
             "updated_at": now_iso(),
         }
-        save_orders(ORDERS_DB)
+        save_tickets(TICKETS_DB)
 
         context.user_data["support_mode"] = True
-        context.user_data["support_order_id"] = str(oid)
+        context.user_data["support_ticket_id"] = str(tid)
 
         txt = get_doc_by_name("support.txt") or "Опишите проблему одним сообщением — я передам менеджеру."
         await update.message.reply_text(
-            f"{txt}\n\n📌 Номер обращения: №{oid}\n\nЧтобы закрыть поддержку нажмите: «❌ Закрыть поддержку»",
+            f"{txt}\n\n📌 Номер обращения: T{tid}\n\nЧтобы закрыть поддержку нажмите: «❌ Закрыть поддержку»",
             reply_markup=ReplyKeyboardMarkup([[KeyboardButton("❌ Закрыть поддержку")]], resize_keyboard=True),
         )
 
@@ -1516,10 +1531,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=ADMIN_ID_INT,
                 text=(
-                    f"🆘 Новое обращение №{oid}\n"
+                    f"🆘 Новое обращение T{tid}\n"
                     f"Клиент: {user_label(update)}\n"
                     f"User ID: {u.id if u else 'unknown'}\n\n"
-                    f"Ответить: /reply {oid} текст"
+                    f"Ответить: /msg {u.id} текст"
                 ),
             )
         return
@@ -1530,16 +1545,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if context.user_data.get("support_mode") and ADMIN_ID_INT is not None:
-        oid = context.user_data.get("support_order_id", "?")
+        tid = context.user_data.get("support_ticket_id", "?")
         u = update.effective_user
         await context.bot.send_message(
             chat_id=ADMIN_ID_INT,
             text=(
-                f"💬 Сообщение клиента (обращение №{oid})\n"
+                f"💬 Сообщение клиента (обращение T{tid})\n"
                 f"Клиент: {user_label(update)}\n"
                 f"User ID: {u.id if u else 'unknown'}\n\n"
                 f"{user_text}\n\n"
-                f"Ответить: /reply {oid} текст"
+                f"Ответить: /msg {u.id} текст"
             ),
         )
         await update.message.reply_text("✅ Передал менеджеру. Ожидайте ответ.")
@@ -1592,8 +1607,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 (
                     f"✅ Вы выбрали: {product['title']}\n"
-                    f"№{oid}\n"
-                    f"💰 К оплате: {price2} сом{promo_line}\n\n"
+                    f"Номер заказа: №{oid}\n"
+                    f"💰 Сумма к оплате: {price2} сом{promo_line}\n\n"
                     f"{pay}\n\n"
                     f"После оплаты нажмите «💳 Я оплатил(а) №{oid}» и отправьте чек."
                 ),
@@ -1749,8 +1764,8 @@ async def setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=user_id,
         text=(
             f"✅ Стоимость рассчитана.\n\n"
-            f"№{oid}\n"
-            f"💰 К оплате: {price2} сом{promo_line}\n\n"
+            f"Номер заказа: №{oid}\n"
+            f"💰 Сумма к оплате: {price2} сом{promo_line}\n\n"
             f"{pay}\n\n"
             f"После оплаты нажмите «💳 Я оплатил(а) №{oid}» и отправьте чек."
         ),
