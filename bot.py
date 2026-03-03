@@ -334,6 +334,11 @@ def apply_promo(price: int, promo: str):
     price2, pct, _err = calc_promo_discount(int(price), promo)
     return price2, pct
 
+def exit_support_mode(context: ContextTypes.DEFAULT_TYPE):
+    """Выключает режим поддержки"""
+    context.user_data["support_mode"] = False
+    context.user_data["support_order_id"] = None
+
 # =====================================================
 # Keyboards
 # =====================================================
@@ -396,7 +401,6 @@ def review_keyboard():
         ],
         resize_keyboard=True,
     )
-
 
 def work_format_keyboard():
     return ReplyKeyboardMarkup(
@@ -476,11 +480,6 @@ def calc_suggested_price(product_key: str, volume_text: str):
         return minimum, f"минимум {minimum}"
     price = max(minimum, qty * per_unit)
     return price, f"{qty} {unit}(ов) × {per_unit} сом (мин {minimum})"
-
-def exit_support_mode(context: ContextTypes.DEFAULT_TYPE):
-    """Выключает режим поддержки"""
-    context.user_data["support_mode"] = False
-    context.user_data["support_order_id"] = None
 
 def order_status_human(status: str):
     mapping = {
@@ -760,6 +759,130 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     context.user_data["form_step"] = step
     await update.message.reply_text(FORM_QUESTIONS[step][1])
     return True
+
+# =====================================================
+# Receipt handlers (photo and document)
+# =====================================================
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    is_admin_user = is_admin(update)
+    oid = context.user_data.get("awaiting_receipt_order_id")
+    if not oid:
+        await update.message.reply_text(
+            "📷 Фото получено.\nЕсли это чек — нажмите кнопку «💳 Я оплатил(а) №...».",
+            reply_markup=main_menu_keyboard(is_admin_user),
+        )
+        return
+
+    context.user_data["awaiting_receipt_order_id"] = None
+
+    order = ORDERS_DB.get("orders", {}).get(str(oid))
+    if not order:
+        await update.message.reply_text("❌ Заказ не найден.", reply_markup=main_menu_keyboard(is_admin_user))
+        return
+
+    if order.get("user_id") != update.effective_user.id:
+        await update.message.reply_text("❌ Это не ваш заказ.", reply_markup=main_menu_keyboard(is_admin_user))
+        context.user_data["awaiting_receipt_order_id"] = None
+        return
+
+    if order.get("status") not in ("priced", "reminded"):
+        await update.message.reply_text(
+            f"По заказу №{oid} сейчас статус: {order_status_human(order.get('status'))}.",
+            reply_markup=main_menu_keyboard(is_admin_user),
+        )
+        return
+
+    order["status"] = "pending"
+    order["updated_at"] = now_iso()
+    save_orders(ORDERS_DB)
+
+    await update.message.reply_text("✅ Чек получен и отправлен на проверку.", reply_markup=main_menu_keyboard(is_admin_user))
+
+    if ADMIN_ID_INT is None:
+        await update.message.reply_text(
+            "⚠️ ADMIN_ID не задан в .env, поэтому чек не может уйти админу.\n"
+            "Добавьте ADMIN_ID и перезапустите бота."
+        )
+        return
+
+    try:
+        await update.message.forward(chat_id=ADMIN_ID_INT)
+    except Exception:
+        pass
+
+    await context.bot.send_message(
+        chat_id=ADMIN_ID_INT,
+        text=(
+            f"🧾 Новый чек (фото)\n"
+            f"№{oid}\n"
+            f"Клиент: {order.get('user_label')}\n"
+            f"User ID: {order.get('user_id')}\n"
+            f"Товар/услуга: {order.get('product_title')}\n"
+            f"Сумма: {format_money(order.get('price'))}\n\n"
+            f"Подтвердить: /confirm {oid}\n"
+            f"Отклонить: /reject {oid}"
+        ),
+    )
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    is_admin_user = is_admin(update)
+    oid = context.user_data.get("awaiting_receipt_order_id")
+    if not oid:
+        await update.message.reply_text(
+            "📎 Файл получен.\nЕсли это чек — нажмите кнопку «💳 Я оплатил(а) №...».",
+            reply_markup=main_menu_keyboard(is_admin_user),
+        )
+        return
+
+    context.user_data["awaiting_receipt_order_id"] = None
+
+    order = ORDERS_DB.get("orders", {}).get(str(oid))
+    if not order:
+        await update.message.reply_text("❌ Заказ не найден.", reply_markup=main_menu_keyboard(is_admin_user))
+        return
+
+    if order.get("user_id") != update.effective_user.id:
+        await update.message.reply_text("❌ Это не ваш заказ.", reply_markup=main_menu_keyboard(is_admin_user))
+        return
+
+    if order.get("status") not in ("priced", "reminded"):
+        await update.message.reply_text(
+            f"По заказу №{oid} сейчас статус: {order_status_human(order.get('status'))}.",
+            reply_markup=main_menu_keyboard(is_admin_user),
+        )
+        return
+
+    order["status"] = "pending"
+    order["updated_at"] = now_iso()
+    save_orders(ORDERS_DB)
+
+    await update.message.reply_text("✅ Чек получен и отправлен на проверку.", reply_markup=main_menu_keyboard(is_admin_user))
+
+    if ADMIN_ID_INT is None:
+        await update.message.reply_text(
+            "⚠️ ADMIN_ID не задан в .env, поэтому чек не может уйти админу.\n"
+            "Добавьте ADMIN_ID и перезапустите бота."
+        )
+        return
+
+    try:
+        await update.message.forward(chat_id=ADMIN_ID_INT)
+    except Exception:
+        pass
+
+    await context.bot.send_message(
+        chat_id=ADMIN_ID_INT,
+        text=(
+            f"🧾 Новый чек (документ)\n"
+            f"№{oid}\n"
+            f"Клиент: {order.get('user_label')}\n"
+            f"User ID: {order.get('user_id')}\n"
+            f"Товар/услуга: {order.get('product_title')}\n"
+            f"Сумма: {format_money(order.get('price'))}\n\n"
+            f"Подтвердить: /confirm {oid}\n"
+            f"Отклонить: /reject {oid}"
+        ),
+    )
 
 # =====================================================
 # User main message handler
@@ -1478,7 +1601,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-                # Для СРС/Реферат/Доклад сначала спрашиваем формат (от руки / печатно)
+        # Для СРС/Реферат/Доклад сначала спрашиваем формат (от руки / печатно)
         if product_key in ("srs", "referat", "doklad"):
             context.user_data["pending_format_product"] = product_key
             await update.message.reply_text(
@@ -1502,7 +1625,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not order or order.get("user_id") != update.effective_user.id:
             await update.message.reply_text("❌ Заказ не найден. Откройте «📂 Каталог».", reply_markup=buy_menu_keyboard())
             return
-        if order.get("status") != "priced":
+        if order.get("status") not in ("priced", "reminded"):
             await update.message.reply_text(
                 f"По заказу №{oid} сейчас статус: {order_status_human(order.get('status'))}.\n"
                 "Если нужен менеджер — нажмите «🆘 Поддержка».",
@@ -1523,70 +1646,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Откройте «🛒 Покупка» → «📂 Каталог».\n"
         "Или нажмите «🆘 Поддержка».",
         reply_markup=main_menu_keyboard(is_admin_user),
-    )
-
-# =====================================================
-# Receipt photo handler
-# =====================================================
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    is_admin_user = is_admin(update)
-    oid = context.user_data.get("awaiting_receipt_order_id")
-    if not oid:
-        await update.message.reply_text(
-            "📷 Фото получено.\nЕсли это чек — нажмите кнопку «💳 Я оплатил(а) №...».",
-            reply_markup=main_menu_keyboard(is_admin_user),
-        )
-        return
-
-    context.user_data["awaiting_receipt_order_id"] = None
-
-    order = ORDERS_DB.get("orders", {}).get(str(oid))
-    if not order:
-        await update.message.reply_text("❌ Заказ не найден.", reply_markup=main_menu_keyboard(is_admin_user))
-        return
-
-    if order.get("user_id") != update.effective_user.id:
-        await update.message.reply_text("❌ Это не ваш заказ.", reply_markup=main_menu_keyboard(is_admin_user))
-        context.user_data["awaiting_receipt_order_id"] = None
-        return
-
-    if order.get("status") != "priced":
-        await update.message.reply_text(
-            f"По заказу №{oid} сейчас статус: {order_status_human(order.get('status'))}.",
-            reply_markup=main_menu_keyboard(is_admin_user),
-        )
-        return
-
-    order["status"] = "pending"
-    order["updated_at"] = now_iso()
-    save_orders(ORDERS_DB)
-
-    await update.message.reply_text("✅ Чек получен и отправлен на проверку.", reply_markup=main_menu_keyboard(is_admin_user))
-
-    if ADMIN_ID_INT is None:
-        await update.message.reply_text(
-            "⚠️ ADMIN_ID не задан в .env, поэтому чек не может уйти админу.\n"
-            "Добавьте ADMIN_ID и перезапустите бота."
-        )
-        return
-
-    try:
-        await update.message.forward(chat_id=ADMIN_ID_INT)
-    except Exception:
-        pass
-
-    await context.bot.send_message(
-        chat_id=ADMIN_ID_INT,
-        text=(
-            f"🧾 Новый чек\n"
-            f"№{oid}\n"
-            f"Клиент: {order.get('user_label')}\n"
-            f"User ID: {order.get('user_id')}\n"
-            f"Товар/услуга: {order.get('product_title')}\n"
-            f"Сумма: {format_money(order.get('price'))}\n\n"
-            f"Подтвердить: /confirm {oid}\n"
-            f"Отклонить: /reject {oid}"
-        ),
     )
 
 # =====================================================
@@ -1981,8 +2040,9 @@ def main():
     app.add_handler(CommandHandler("delivered", delivered))
     app.add_handler(CommandHandler("stats", stats))
 
-    # receipt photo
+    # receipt handlers
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
     # text
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -1996,6 +2056,7 @@ def main():
     print("👮‍♂️ Бан: кнопка в админке")
     print("♻ Разбан: кнопка в админке")
     print("🧹 Снять бан (спам): только для авто-спама")
+    print("📄 Принимаются чеки: фото и документы")
     app.run_polling()
 
 if __name__ == "__main__":
