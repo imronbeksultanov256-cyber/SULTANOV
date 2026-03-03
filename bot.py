@@ -1069,7 +1069,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    # ================= ADMIN PANEL =================
+        # ================= ADMIN PANEL =================
     if is_admin(update):
         # Кнопки админ-панели
         if user_text == "🧾 Чеки (pending)":
@@ -1106,8 +1106,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if user_text == "💰 Выставить цену":
-            context.user_data["admin_action"] = "setprice"
-            await update.message.reply_text("Введите номер и сумму. Пример: 25 700")
+            context.user_data["admin_action"] = "setprice_wait_order"
+            await update.message.reply_text("Введите номер заказа (например: 25)")
             return
 
         if user_text == "💬 Ответ клиенту":
@@ -1165,10 +1165,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # обработка ввода после кнопки
         action = context.user_data.get("admin_action")
         if action:
+            # ===== 2-ШАГОВЫЙ ВВОД ЦЕНЫ =====
+            if action == "setprice_wait_order":
+                oid = extract_first_int(user_text)
+                if not oid:
+                    await update.message.reply_text("Введите корректный номер заказа (например: 25)")
+                    return
+                context.user_data["active_order"] = str(oid)
+                context.user_data["admin_action"] = "setprice_wait_amount"
+                await update.message.reply_text(f"Ок. Теперь введите сумму для заказа №{oid} (например: 700)")
+                return
+
+            if action == "setprice_wait_amount":
+                oid = context.user_data.get("active_order")
+                if not oid:
+                    context.user_data["admin_action"] = None
+                    await update.message.reply_text("⚠️ Потерял номер заказа. Нажмите «💰 Выставить цену» заново.")
+                    return
+
+                price = extract_first_int(user_text)
+                if price is None:
+                    await update.message.reply_text("Введите сумму числом (например: 700)")
+                    return
+
+                context.args = [str(oid), str(price)]
+                await setprice(update, context)
+
+                context.user_data["admin_action"] = None
+                context.user_data["active_order"] = None
+                await update.message.reply_text("✅ Готово.", reply_markup=admin_panel_keyboard())
+                return
+
             # Если есть активный заказ, используем его
             oid = context.user_data.get("active_order")
 
-            if action in ("confirm", "reject", "inwork", "ready", "send_file", "setprice", "reply"):
+            if action in ("confirm", "reject", "inwork", "ready", "send_file", "reply"):
                 if not oid:
                     oid = extract_first_int(user_text)
                     if not oid:
@@ -1205,17 +1236,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text(
                         f"📎 Теперь отправьте файл или ссылку для заказа №{oid}."
                     )
-                    return
-
-                if action == "setprice":
-                    parts = user_text.split()
-                    if len(parts) < 2:
-                        await update.message.reply_text("Формат: 25 700")
-                        return
-                    context.args = parts
-                    await setprice(update, context)
-                    context.user_data["admin_action"] = None
-                    await update.message.reply_text("✅ Готово.", reply_markup=admin_panel_keyboard())
                     return
 
                 if action == "reply":
