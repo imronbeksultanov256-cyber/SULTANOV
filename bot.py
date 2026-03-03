@@ -100,7 +100,7 @@ def load_kb_items():
     if not KB_PATH.exists():
         return []
     try:
-        data = json.load(KB_PATH.read_text(encoding="utf-8"))
+        data = json.loads(KB_PATH.read_text(encoding="utf-8"))
         return data.get("items", [])
     except Exception:
         return []
@@ -172,13 +172,15 @@ def parse_deadline_text(text: str):
     m = re.search(r"^(сегодня|завтра)\s+(\d{1,2}):(\d{2})$", t)
     if m:
         day = m.group(1)
-        hh = int(m.group(2)); mm = int(m.group(3))
+        hh = int(m.group(2))
+        mm = int(m.group(3))
         base = now if day == "сегодня" else (now + timedelta(days=1))
         return base.replace(hour=hh, minute=mm, second=0, microsecond=0)
 
     m = re.fullmatch(r"(\d{1,2}):(\d{2})", t)
     if m:
-        hh = int(m.group(1)); mm = int(m.group(2))
+        hh = int(m.group(1))
+        mm = int(m.group(2))
         return now.replace(hour=hh, minute=mm, second=0, microsecond=0)
 
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", t):
@@ -475,6 +477,11 @@ def calc_suggested_price(product_key: str, volume_text: str):
     price = max(minimum, qty * per_unit)
     return price, f"{qty} {unit}(ов) × {per_unit} сом (мин {minimum})"
 
+def exit_support_mode(context: ContextTypes.DEFAULT_TYPE):
+    """Выключает режим поддержки"""
+    context.user_data["support_mode"] = False
+    context.user_data["support_order_id"] = None
+
 def order_status_human(status: str):
     mapping = {
         "needs_pricing": "⏳ Ожидает расчёта стоимости",
@@ -597,7 +604,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 uid,
                 f"📢 Уведомление от StubHub:\n\n{text}",
-                reply_markup=main_menu_keyboard()
+                reply_markup=main_menu_keyboard(False)
             )
             success += 1
             await asyncio.sleep(0.05)  # Небольшая задержка чтобы не флудить
@@ -630,6 +637,9 @@ def form_reset(context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("pending_format_product", None)
 
 async def form_start(update: Update, context: ContextTypes.DEFAULT_TYPE, product_key: str):
+    # Выходим из режима поддержки
+    exit_support_mode(context)
+    
     context.user_data["selected_product"] = product_key
     context.user_data["form_step"] = 0
     context.user_data["form_data"] = {}
@@ -931,31 +941,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if user_text == "✅ Подтвердить":
-            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "confirm"
             await update.message.reply_text("Введите номер заказа:")
             return
 
         if user_text == "❌ Отклонить":
-            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "reject"
             await update.message.reply_text("Введите номер заказа:")
             return
 
         if user_text == "🟡 В работу":
-            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "inwork"
             await update.message.reply_text("Введите номер заказа:")
             return
 
         if user_text == "🟢 Готово":
-            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "ready"
             await update.message.reply_text("Введите номер заказа:")
             return
 
         if user_text == "📩 Выдано":
-            context.user_data.pop("active_order", None)
             context.user_data["admin_action"] = "send_file"
             await update.message.reply_text("Введите номер заказа:")
             return
@@ -989,6 +994,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["admin_action"] = "unban_spam"
             await update.message.reply_text("Введите USER_ID для снятия спам-бана:")
             return
+            
         if user_text == "➕ Добавить товар":
             context.user_data["admin_action"] = "add_product"
             await update.message.reply_text(
@@ -1019,16 +1025,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # обработка ввода после кнопки
         action = context.user_data.get("admin_action")
         if action:
-            # Если админ ввёл номер в сообщении — используем его, иначе берём active_order
-            parsed_oid = extract_first_int(user_text)
-            oid = parsed_oid if parsed_oid else context.user_data.get("active_order")
+            # Если есть активный заказ, используем его
+            oid = context.user_data.get("active_order")
 
             if action in ("confirm", "reject", "inwork", "ready", "send_file", "setprice", "reply"):
                 if not oid:
-                    await update.message.reply_text("Введите корректный номер.")
-                    return
-                # сохраняем как active_order для следующих шагов (например setprice/reply)
-                context.user_data["active_order"] = str(oid)
+                    oid = extract_first_int(user_text)
+                    if not oid:
+                        await update.message.reply_text("Введите корректный номер.")
+                        return
+                    context.user_data["active_order"] = str(oid)
 
                 if action in ("confirm", "reject", "inwork", "ready"):
                     context.args = [str(oid)]
@@ -1253,11 +1259,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user_text == "🏠 В меню":
-        await update.message.reply_text("🏠 Главное меню:", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("🏠 Главное меню:", reply_markup=main_menu_keyboard(is_admin_user))
         return
 
     if user_text == "⬅️ Назад":
-        await update.message.reply_text("🏠 Главное меню:", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("🏠 Главное меню:", reply_markup=main_menu_keyboard(is_admin_user))
         return
 
     if user_text == "⬅️ В меню":
@@ -1266,15 +1272,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user_text == "🛒 Покупка":
         # 🔥 отключаем поддержку если была включена
-        context.user_data["support_mode"] = False
-        context.user_data["support_order_id"] = None
+        exit_support_mode(context)
         await update.message.reply_text("🛒 Раздел покупок:", reply_markup=buy_menu_keyboard())
         return
 
     if user_text == "📂 Каталог":
         # 🔥 отключаем поддержку если была включена
-        context.user_data["support_mode"] = False
-        context.user_data["support_order_id"] = None
+        exit_support_mode(context)
         await update.message.reply_text("📦 Выберите товар/услугу:", reply_markup=catalog_keyboard())
         return
 
@@ -1398,9 +1402,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user_text == "❌ Закрыть поддержку":
-        context.user_data["support_mode"] = False
-        context.user_data["support_order_id"] = None
-        await update.message.reply_text("✅ Поддержка закрыта. Возвращаю меню.", reply_markup=main_menu_keyboard())
+        exit_support_mode(context)
+        await update.message.reply_text("✅ Поддержка закрыта. Возвращаю меню.", reply_markup=main_menu_keyboard(is_admin_user))
         return
 
     if context.user_data.get("support_mode") and ADMIN_ID_INT is not None:
@@ -1422,35 +1425,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Выбор формата (для СРС/Доклад/Реферат)
     if context.user_data.get("pending_format_product"):
         pk = context.user_data.get("pending_format_product")
-
-        lower_fmt = user_text.strip().lower()
-        if ("от руки" in lower_fmt) or ("рукой" in lower_fmt) or (user_text.strip() == "✍️ От руки"):
-            context.user_data["work_format"] = "От руки"
-        elif ("печат" in lower_fmt) or (user_text.strip() == "⌨️ Печатно"):
-            context.user_data["work_format"] = "Печатно"
-        else:
-            await update.message.reply_text(
-    "✍️ Пожалуйста, выберите формат кнопкой ниже:\n"
-    "• От руки\n"
-    "• Печатно"
-
-                reply_markup=work_format_keyboard(),
-            )
+        if user_text in ("✍️ От руки", "⌨️ Печатно"):
+            context.user_data["work_format"] = "От руки" if user_text == "✍️ От руки" else "Печатно"
+            context.user_data["pending_format_product"] = None
+            await form_start(update, context, pk)
+            promo_default = context.user_data.get("promo_default", "")
+            if promo_default:
+                await update.message.reply_text(f"🎟 У вас активен промокод: {promo_default} (учту в цене).")
             return
-
-        context.user_data["pending_format_product"] = None
-        await form_start(update, context, pk)
-        promo_default = context.user_data.get("promo_default", "")
-        if promo_default:
-            await update.message.reply_text(f"🎟 У вас активен промокод: {promo_default} (учту в цене).")
-        return
 
     # Каталог
     product_key = key_from_button_text(user_text)
     if product_key:
         # 🔥 отключаем поддержку если была включена
-        context.user_data["support_mode"] = False
-        context.user_data["support_order_id"] = None
+        exit_support_mode(context)
         
         promo_default = context.user_data.get("promo_default", "")
         if product_key == "gistology_ready":
@@ -1494,7 +1482,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if product_key in ("srs", "referat", "doklad"):
             context.user_data["pending_format_product"] = product_key
             await update.message.reply_text(
-                "✍️ Выберите формат выполнения:\n\n"
+                "✍️ Пожалуйста, выберите формат кнопкой ниже:\n"
                 "• От руки\n"
                 "• Печатно",
                 reply_markup=work_format_keyboard(),
@@ -1554,11 +1542,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     order = ORDERS_DB.get("orders", {}).get(str(oid))
     if not order:
-        await update.message.reply_text("❌ Заказ не найден.", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("❌ Заказ не найден.", reply_markup=main_menu_keyboard(is_admin_user))
         return
 
     if order.get("user_id") != update.effective_user.id:
-        await update.message.reply_text("❌ Это не ваш заказ.", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("❌ Это не ваш заказ.", reply_markup=main_menu_keyboard(is_admin_user))
         context.user_data["awaiting_receipt_order_id"] = None
         return
 
@@ -1573,7 +1561,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     order["updated_at"] = now_iso()
     save_orders(ORDERS_DB)
 
-    await update.message.reply_text("✅ Чек получен и отправлен на проверку.", reply_markup=main_menu_keyboard())
+    await update.message.reply_text("✅ Чек получен и отправлен на проверку.", reply_markup=main_menu_keyboard(is_admin_user))
 
     if ADMIN_ID_INT is None:
         await update.message.reply_text(
@@ -1620,7 +1608,7 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Текст пустой.")
         return
     try:
-        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=main_menu_keyboard())
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=main_menu_keyboard(False))
         await update.message.reply_text("✅ Отправлено клиенту.")
     except Exception as e:
         await update.message.reply_text(f"⚠️ Не удалось отправить: {e}")
@@ -1645,7 +1633,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=user_id,
             text=f"👨‍💼 Менеджер:\n{text}",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_keyboard(False),
         )
         await update.message.reply_text("✅ Отправлено.")
     except Exception as e:
@@ -1727,7 +1715,7 @@ async def inwork(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_orders(ORDERS_DB)
     uid = order.get("user_id")
     if uid:
-        await context.bot.send_message(uid, f"🟡 Заказ №{oid} взят в работу.\nМы напишем, когда будет готово.", reply_markup=main_menu_keyboard())
+        await context.bot.send_message(uid, f"🟡 Заказ №{oid} взят в работу.\nМы напишем, когда будет готово.", reply_markup=main_menu_keyboard(False))
     await update.message.reply_text("✅ Статус: в работе.")
 
 async def ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1746,7 +1734,7 @@ async def ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_orders(ORDERS_DB)
     uid = order.get("user_id")
     if uid:
-        await context.bot.send_message(uid, f"🟢 Заказ №{oid} готов!\nНапишите «поддержка», если нужно что-то уточнить.", reply_markup=main_menu_keyboard())
+        await context.bot.send_message(uid, f"🟢 Заказ №{oid} готов!\nНапишите «поддержка», если нужно что-то уточнить.", reply_markup=main_menu_keyboard(False))
     await update.message.reply_text("✅ Статус: готово.")
 
 async def delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1928,7 +1916,7 @@ async def _confirm_order(context: ContextTypes.DEFAULT_TYPE, oid: str, notify_ad
             "⏳ Как будет готово — отправим сюда.\n\n"
             "⭐️ После получения сможете оставить отзыв 🙏"
         ),
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard(False),
     )
 
 async def _reject_order(context: ContextTypes.DEFAULT_TYPE, oid: str, notify_admin: bool = False, admin_message=None):
@@ -1956,7 +1944,7 @@ async def _reject_order(context: ContextTypes.DEFAULT_TYPE, oid: str, notify_adm
                 "Пожалуйста, отправьте *полный* чек (чтобы было видно сумму и дату/время) "
                 "или нажмите «🆘 Поддержка»."
             ),
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_keyboard(False),
         )
 
     if notify_admin and admin_message:
