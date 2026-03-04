@@ -12,6 +12,8 @@ from telegram import (
     ReplyKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardRemove,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
 )
 from telegram.ext import (
     Application,
@@ -19,6 +21,7 @@ from telegram.ext import (
     MessageHandler,
     ContextTypes,
     filters,
+    CallbackQueryHandler,
 )
 
 # =====================================================
@@ -363,6 +366,25 @@ def exit_support_mode(context: ContextTypes.DEFAULT_TYPE):
     context.user_data["support_ticket_id"] = None
 
 # =====================================================
+# Support helpers
+# =====================================================
+def ticket_tag(tid: str) -> str:
+    tid = str(tid).replace("T", "").strip()
+    return f"T{tid}"
+
+def extract_ticket_id(text: str):
+    if not text:
+        return None
+    m = re.search(r"\bT(\d+)\b", text)
+    return m.group(1) if m else None
+
+def support_reply_markup(tid: str):
+    tid = str(tid).replace("T", "").strip()
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("💬 Ответить", callback_data=f"support_reply_{tid}")]]
+    )
+
+# =====================================================
 # Keyboards
 # =====================================================
 def main_menu_keyboard(is_admin_user: bool = False):
@@ -562,6 +584,22 @@ async def unpaid_reminder(app):
             logging.error(f"Ошибка в unpaid_reminder: {e}")
             
         await asyncio.sleep(3600)  # Проверка каждый час
+
+# =====================================================
+# Support reply button handler
+# =====================================================
+async def support_reply_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки ответа на обращение"""
+    query = update.callback_query
+    await query.answer()
+
+    tid = (query.data or "").replace("support_reply_", "").strip()
+    if not tid.isdigit():
+        await query.message.reply_text("❌ Некорректный ID обращения.")
+        return
+
+    context.user_data["reply_ticket"] = tid
+    await query.message.reply_text(f"✍️ Напишите ответ клиенту по обращению {ticket_tag(tid)}:")
 
 # =====================================================
 # Handlers: start + user
@@ -990,9 +1028,57 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Если ошибка — @slt_nv"
             )
             return
-        
-        
-# ================= ОТПРАВКА ФАЙЛА ПОКУПАТЕЛЮ =================
+
+    # ===== Ответ менеджера по кнопке "💬 Ответить" (тикеты) =====
+    if is_admin(update) and context.user_data.get("reply_ticket"):
+        tid = str(context.user_data.get("reply_ticket")).strip()
+        context.user_data["reply_ticket"] = None
+
+        ticket = TICKETS_DB.get("tickets", {}).get(tid)
+        if not ticket:
+            await update.message.reply_text("❌ Обращение не найдено.")
+            return
+
+        client_id = ticket.get("user_id")
+        if not client_id:
+            await update.message.reply_text("❌ У обращения нет user_id.")
+            return
+
+        # сообщение клиенту (без имени менеджера)
+        await context.bot.send_message(
+            chat_id=client_id,
+            text=(
+                "👨‍💼 Менеджер:\n"
+                f"📌 Обращение: {ticket_tag(tid)}\n\n"
+                f"{user_text}"
+            ),
+            reply_markup=main_menu_keyboard(False),
+        )
+
+        await update.message.reply_text("✅ Ответ отправлен клиенту.", reply_markup=admin_panel_keyboard())
+        return
+
+    # ===== Авточат: клиент отвечает reply на сообщение менеджера -> админу =====
+    if (not is_admin_user) and update.message.reply_to_message:
+        ref_text = (update.message.reply_to_message.text or "")
+        tid = extract_ticket_id(ref_text)
+        if tid and ADMIN_ID_INT is not None:
+            ticket = TICKETS_DB.get("tickets", {}).get(str(tid))
+            if ticket and ticket.get("user_id") == update.effective_user.id:
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID_INT,
+                    text=(
+                        f"💬 Ответ клиента (обращение {ticket_tag(tid)})\n"
+                        f"Клиент: {user_label(update)}\n"
+                        f"User ID: {update.effective_user.id}\n\n"
+                        f"{user_text}"
+                    ),
+                    reply_markup=support_reply_markup(tid),
+                )
+                await update.message.reply_text("✅ Передал менеджеру. Ожидайте ответ.")
+                return
+
+    # ================= ОТПРАВКА ФАЙЛА ПОКУПАТЕЛЮ =================
     if is_admin(update) and context.user_data.get("send_file_order"):
         oid = context.user_data.get("send_file_order")
         order = ORDERS_DB.get("orders", {}).get(oid)
@@ -1069,7 +1155,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-        # ================= ADMIN PANEL =================
+    # ================= ADMIN PANEL =================
     if is_admin(update):
         # Кнопки админ-панели
         if user_text == "🧾 Чеки (pending)":
@@ -1543,7 +1629,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         txt = get_doc_by_name("support.txt") or "Опишите проблему одним сообщением — я передам менеджеру."
         await update.message.reply_text(
-            f"{txt}\n\n📌 Номер обращения: T{tid}\n\nЧтобы закрыть поддержку нажмите: «❌ Закрыть поддержку»",
+            f"{txt}\n\n📌 Номер обращения: {ticket_tag(str(tid))}\n\nЧтобы закрыть поддержку нажмите: «❌ Закрыть поддержку»",
             reply_markup=ReplyKeyboardMarkup([[KeyboardButton("❌ Закрыть поддержку")]], resize_keyboard=True),
         )
 
@@ -1551,11 +1637,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=ADMIN_ID_INT,
                 text=(
-                    f"🆘 Новое обращение T{tid}\n"
+                    f"🆘 Новое обращение {ticket_tag(str(tid))}\n"
                     f"Клиент: {user_label(update)}\n"
                     f"User ID: {u.id if u else 'unknown'}\n\n"
-                    f"Ответить: /msg {u.id} текст"
+                    f"Нажмите «Ответить» и напишите сообщение."
                 ),
+                reply_markup=support_reply_markup(str(tid)),
             )
         return
 
@@ -1570,12 +1657,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=ADMIN_ID_INT,
             text=(
-                f"💬 Сообщение клиента (обращение T{tid})\n"
+                f"💬 Сообщение клиента (обращение {ticket_tag(tid)})\n"
                 f"Клиент: {user_label(update)}\n"
                 f"User ID: {u.id if u else 'unknown'}\n\n"
-                f"{user_text}\n\n"
-                f"Ответить: /msg {u.id} текст"
+                f"{user_text}"
             ),
+            reply_markup=support_reply_markup(tid),
         )
         await update.message.reply_text("✅ Передал менеджеру. Ожидайте ответ.")
         return
@@ -2075,6 +2162,9 @@ def main():
     app.add_handler(CommandHandler("delivered", delivered))
     app.add_handler(CommandHandler("stats", stats))
 
+    # callbacks
+    app.add_handler(CallbackQueryHandler(support_reply_button, pattern="^support_reply_"))
+
     # receipt handlers
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
@@ -2092,6 +2182,7 @@ def main():
     print("♻ Разбан: кнопка в админке")
     print("🧹 Снять бан (спам): только для авто-спама")
     print("📄 Принимаются чеки: фото и документы")
+    print("💬 Поддержка: с кнопкой ответить")
     app.run_polling()
 
 if __name__ == "__main__":
