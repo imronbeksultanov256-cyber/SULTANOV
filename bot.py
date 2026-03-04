@@ -70,6 +70,37 @@ def save_json(filepath, data):
 # =====================================================
 # Helper functions
 # =====================================================
+def format_print_details(details: dict) -> str:
+    """Красивый вывод заявки на печать (Ч/Б) вместо JSON"""
+    if not isinstance(details, dict):
+        return "—"
+
+    fmt = details.get("format", "—")
+    sides = details.get("sides", "—")
+    copies = details.get("copies", "—")
+    pages = details.get("pages", "—")
+    address = details.get("address", "—")
+    deadline = details.get("deadline", "—")
+    promo = details.get("promo", "—")
+
+    # у вас только ч/б
+    color = "Ч/Б"
+
+    lines = [
+        "📌 Детали печати:",
+        f"• Формат: {fmt}",
+        f"• Сторон: {sides}",
+        f"• Экземпляров: {copies}",
+        f"• Страниц: {pages}",
+        f"• Цвет: {color}",
+        f"• Адрес: {address}",
+        f"• Срок: {deadline}",
+    ]
+    if promo and promo not in ("—", "", None):
+        lines.append(f"• Промокод: {promo}")
+
+    return "\n".join(lines)
+    
 def extract_first_int(text: str):
     """Извлекает первое число из текста"""
     if not text:
@@ -689,7 +720,16 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
                     f"Клиент: {user_label(update)}\n"
                     f"Username: @{u.username if u and u.username else 'нет'}\n"
                     f"User ID: {u.id if u else 'unknown'}\n\n"
-                    f"Детали:\n{json.dumps(form_data, ensure_ascii=False, indent=2)}\n\n"
+                    f"Детали:\n"
+                    f"📌 Детали печати:\n"
+                    f"• Формат: {form_data.get('format')}\n"
+                    f"• Сторон: {form_data.get('sides')}\n"
+                    f"• Экземпляров: {form_data.get('copies')}\n"
+                    f"• Страниц: {form_data.get('pages')}\n"
+                    f"• Цвет: Ч/Б\n"
+                    f"• Адрес: {form_data.get('address')}\n"
+                    f"• Срок: {form_data.get('deadline')}\n"
+                    f"• Промокод: {form_data.get('promo')}\n\n"
                     f"После файла выстави цену: /setprice {oid} 200",
                 )
             form_reset(context)
@@ -1274,7 +1314,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🖨 Фото для печати получено\n"
                     f"Заказ №{poid}\n"
                     f"Клиент: {user_label(update)}\n"
-                    f"Username: @{u.username if u and u.username else 'нет'}\n"
+                    f"Username: @{u.username}" if u and u.username else "Username: —"
                     f"User ID: {u.id if u else 'unknown'}\n\n"
                     f"Выставить цену: /setprice {poid} 200"
                 ),
