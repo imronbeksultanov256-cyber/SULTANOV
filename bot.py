@@ -154,6 +154,17 @@ def last_order_for_user(user_id: int):
     items.sort(key=lambda x: int(x[0]))
     return items[-1] if items else (None, None)
 
+def get_user_pending_payment_order(user_id: int):
+    """Находит неоплаченный заказ пользователя (статусы priced или reminded)"""
+    orders = ORDERS_DB.get("orders", {})
+    items = [(oid, o) for oid, o in orders.items()
+             if o.get("user_id") == user_id and o.get("status") in ("priced", "reminded")]
+    if not items:
+        return None, None
+    # берём самый свежий
+    items.sort(key=lambda x: int(x[0]))
+    return items[-1]
+
 # =====================================================
 # Мини-FSM: управление режимами
 # =====================================================
@@ -357,6 +368,10 @@ def load_products():
             "referat": {"title": "📄 Реферат", "type": "individual"},
             "doklad": {"title": "📘 Доклад", "type": "individual"},
             "presentation": {"title": "📊 Презентация (PowerPoint)", "type": "individual"},
+            "print_service": {
+                "title": "🖨 Печать (распечатать файл, только Ч/Б)",
+                "type": "print"
+            },
         }
         save_json(PRODUCTS_PATH, default_products)
         return default_products
@@ -452,7 +467,8 @@ def apply_promo(price: int, promo: str):
 def main_menu_keyboard(is_admin_user: bool = False):
     rows = [
         [KeyboardButton("🛒 Покупка"), KeyboardButton("ℹ️ Инфо")],
-        [KeyboardButton("🆘 Поддержка"), KeyboardButton("📌 Статус заказа")],
+        [KeyboardButton("📦 Мои заказы"), KeyboardButton("📌 Статус заказа")],
+        [KeyboardButton("🆘 Поддержка")],
     ]
     if is_admin_user:
         rows.append([KeyboardButton("🛠 Админ панель")])
@@ -561,12 +577,24 @@ FORM_QUESTIONS = [
     ("promo", "🎟 Если есть промокод — отправьте его. Если нет — напишите «нет»."),
 ]
 
+PRINT_FORM_QUESTIONS = [
+    ("format", "📄 Формат бумаги? (A4 / A3)"),
+    ("sides", "↔️ Печать с одной стороны или с двух? (1 / 2)"),
+    ("copies", "🧾 Сколько копий нужно? (например: 2)"),
+    ("pages", "📑 Сколько страниц? (например: 12)"),
+    ("address", "📍 Где удобно забрать? (город/район)"),
+    ("deadline", "⏰ Когда нужно? (сегодня 18:00 / завтра / дата)"),
+    ("promo", "🎟 Если есть промокод — отправьте. Если нет — «нет»."),
+]
+
 def form_reset(context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("form_step", None)
     context.user_data.pop("form_data", None)
     context.user_data.pop("selected_product", None)
     context.user_data.pop("work_format", None)
     context.user_data.pop("pending_format_product", None)
+    context.user_data.pop("form_kind", None)
+    context.user_data.pop("awaiting_print_file_order_id", None)
     # очищаем режим оформления
     if context.user_data.get("mode") in ("order_form", "format"):
         context.user_data["mode"] = None
@@ -579,37 +607,99 @@ async def form_start(update: Update, context: ContextTypes.DEFAULT_TYPE, product
     context.user_data["selected_product"] = product_key
     context.user_data["form_step"] = 0
     context.user_data["form_data"] = {}
-    fmt = context.user_data.get("work_format")
-    fmt_line = f"\n🖊 Формат: {fmt}" if fmt else ""
+
+    ptype = PRODUCTS.get(product_key, {}).get("type")
+    context.user_data["form_kind"] = "print" if ptype == "print" else "default"
+
     await update.message.reply_text(
-        f"✅ Вы выбрали: {PRODUCTS[product_key]['title']}" + fmt_line + "\n\n"
-        "Заполним короткую форму (4–5 сообщений).",
+        f"✅ Вы выбрали: {PRODUCTS[product_key]['title']}\n\n"
+        "Заполним короткую форму (несколько сообщений).",
         reply_markup=ReplyKeyboardRemove(),
     )
-    await update.message.reply_text(FORM_QUESTIONS[0][1])
+
+    if context.user_data["form_kind"] == "print":
+        await update.message.reply_text(
+            "🖨 Печать доступна только **чёрно-белая (Ч/Б)**.",
+            parse_mode="Markdown",
+        )
+
+    questions = PRINT_FORM_QUESTIONS if context.user_data["form_kind"] == "print" else FORM_QUESTIONS
+    await update.message.reply_text(questions[0][1])
 
 async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user_text: str):
     step = context.user_data.get("form_step")
     if step is None:
         return False
 
+    questions = PRINT_FORM_QUESTIONS if context.user_data.get("form_kind") == "print" else FORM_QUESTIONS
     product_key = context.user_data.get("selected_product")
     form_data = context.user_data.get("form_data") or {}
 
-    key, _question = FORM_QUESTIONS[step]
+    key, _question = questions[step]
     form_data[key] = user_text.strip()
     context.user_data["form_data"] = form_data
 
     step += 1
-    if step >= len(FORM_QUESTIONS):
+    if step >= len(questions):
         context.user_data["form_step"] = None
 
+        u = update.effective_user
+        oid = new_order_id()
+        product_title = PRODUCTS.get(product_key, {}).get("title", product_key)
+        promo = (form_data.get("promo") or "").strip()
+        promo = "" if promo.lower() in ("нет", "no", "-") else promo.upper()
+
+        # Для печати добавляем фиксированное поле "color": "Ч/Б"
+        if context.user_data.get("form_kind") == "print":
+            form_data["color"] = "Ч/Б"
+
+        ORDERS_DB["orders"][str(oid)] = {
+            "status": "needs_pricing",
+            "user_id": u.id if u else None,
+            "user_label": user_label(update),
+            "username": f"@{u.username}" if (u and u.username) else None,
+            "product": product_key,
+            "product_title": product_title,
+            "promo": promo if promo else None,
+            "promo_pct": 0,
+            "details": form_data,
+            "print_file": None,
+            "print_file_type": None,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        save_orders(ORDERS_DB)
+
+        # Если это печать — просим файл
+        if context.user_data.get("form_kind") == "print":
+            context.user_data["awaiting_print_file_order_id"] = str(oid)
+            await update.message.reply_text(
+                f"✅ Заявка на печать принята! №{oid}\n\n"
+                "📎 Теперь отправьте файл для печати (PDF/Word/фото).\n"
+                "Можно просто документом сюда.",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+
+            # админу — уведомление сразу (без файла, файл придёт следующим шагом)
+            if ADMIN_ID_INT:
+                await context.bot.send_message(
+                    ADMIN_ID_INT,
+                    "🖨 Новая заявка на печать\n"
+                    f"Заказ №{oid}\n"
+                    f"Клиент: {user_label(update)}\n"
+                    f"Username: @{u.username if u and u.username else 'нет'}\n"
+                    f"User ID: {u.id if u else 'unknown'}\n\n"
+                    f"Детали:\n{json.dumps(form_data, ensure_ascii=False, indent=2)}\n\n"
+                    f"После файла выстави цену: /setprice {oid} 200",
+                )
+            form_reset(context)
+            return True
+
+        # Для обычных услуг — стандартная логика
         topic = form_data.get("topic", "")
         volume = form_data.get("volume", "")
         reqs = form_data.get("reqs", "")
         deadline = form_data.get("deadline", "")
-        promo = form_data.get("promo", "").strip()
-        promo = "" if promo.lower() in ("нет", "no", "-") else promo.upper()
 
         urgent, urgent_fee, hours_left = urgency_fee_from_deadline(deadline)
 
@@ -622,36 +712,15 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
 
         if suggested_price is not None:
             sp2, pct = apply_promo(suggested_price, promo)
+            ORDERS_DB["orders"][str(oid)]["promo_pct"] = pct
+            ORDERS_DB["orders"][str(oid)]["suggested_price"] = sp2
+            ORDERS_DB["orders"][str(oid)]["suggested_breakdown"] = breakdown
         else:
             sp2, pct = (None, 0)
 
-        oid = new_order_id()
-        u = update.effective_user
-        product_title = PRODUCTS.get(product_key, {}).get("title", product_key)
-
-        ORDERS_DB["orders"][str(oid)] = {
-            "status": "needs_pricing",
-            "user_id": u.id if u else None,
-            "user_label": user_label(update),
-            "product": product_key,
-            "product_title": product_title,
-            "details": {
-                "topic": topic,
-                "volume": volume,
-                "reqs": reqs,
-                "deadline": deadline,
-                "format": context.user_data.get("work_format"),
-            },
-            "promo": promo if promo else None,
-            "promo_pct": pct,
-            "urgent": urgent,
-            "urgent_fee": urgent_fee,
-            "urgent_hours_left": hours_left,
-            "suggested_price": sp2,
-            "suggested_breakdown": breakdown,
-            "created_at": now_iso(),
-            "updated_at": now_iso(),
-        }
+        ORDERS_DB["orders"][str(oid)]["urgent"] = urgent
+        ORDERS_DB["orders"][str(oid)]["urgent_fee"] = urgent_fee
+        ORDERS_DB["orders"][str(oid)]["urgent_hours_left"] = hours_left
         save_orders(ORDERS_DB)
 
         await update.message.reply_text(
@@ -694,7 +763,7 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         return True
 
     context.user_data["form_step"] = step
-    await update.message.reply_text(FORM_QUESTIONS[step][1])
+    await update.message.reply_text(questions[step][1])
     return True
 
 
@@ -1174,6 +1243,45 @@ async def reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Receipt handlers (photo and document)
 # =====================================================
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 1) ФОТО ДЛЯ ПЕЧАТИ (приоритет)
+    poid = context.user_data.get("awaiting_print_file_order_id")
+    if poid:
+        order = ORDERS_DB.get("orders", {}).get(str(poid))
+        if not order or order.get("user_id") != update.effective_user.id:
+            context.user_data["awaiting_print_file_order_id"] = None
+            await update.message.reply_text("❌ Заказ печати не найден.", reply_markup=main_menu_keyboard(False))
+            return
+
+        photo_id = update.message.photo[-1].file_id
+        order["print_file"] = photo_id
+        order["print_file_type"] = "photo"
+        order["updated_at"] = now_iso()
+        save_orders(ORDERS_DB)
+
+        context.user_data["awaiting_print_file_order_id"] = None
+
+        await update.message.reply_text(
+            "✅ Фото получено! Сейчас рассчитаю стоимость и напишу вам.",
+            reply_markup=buy_menu_keyboard(),
+        )
+
+        if ADMIN_ID_INT:
+            u = update.effective_user
+            await context.bot.send_photo(
+                chat_id=ADMIN_ID_INT,
+                photo=photo_id,
+                caption=(
+                    "🖨 Фото для печати получено\n"
+                    f"Заказ №{poid}\n"
+                    f"Клиент: {user_label(update)}\n"
+                    f"Username: @{u.username if u and u.username else 'нет'}\n"
+                    f"User ID: {u.id if u else 'unknown'}\n\n"
+                    f"Выставить цену: /setprice {poid} 200"
+                ),
+            )
+        return
+
+    # 2) ЧЕК (фото) — твоя текущая логика
     is_admin_user = is_admin(update)
     oid = context.user_data.get("awaiting_receipt_order_id")
     if not oid:
@@ -1232,6 +1340,46 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 1) ФАЙЛ ДЛЯ ПЕЧАТИ (приоритет)
+    poid = context.user_data.get("awaiting_print_file_order_id")
+    if poid:
+        order = ORDERS_DB.get("orders", {}).get(str(poid))
+        if not order or order.get("user_id") != update.effective_user.id:
+            context.user_data["awaiting_print_file_order_id"] = None
+            await update.message.reply_text("❌ Заказ печати не найден.", reply_markup=main_menu_keyboard(False))
+            return
+
+        doc_id = update.message.document.file_id
+        order["print_file"] = doc_id
+        order["print_file_type"] = "document"
+        order["updated_at"] = now_iso()
+        save_orders(ORDERS_DB)
+
+        context.user_data["awaiting_print_file_order_id"] = None
+
+        await update.message.reply_text(
+            "✅ Файл получен! Сейчас я рассчитаю стоимость и напишу вам.\n"
+            "Если нужно срочно — нажмите «🆘 Поддержка».",
+            reply_markup=buy_menu_keyboard(),
+        )
+
+        if ADMIN_ID_INT:
+            u = update.effective_user
+            await context.bot.send_document(
+                chat_id=ADMIN_ID_INT,
+                document=doc_id,
+                caption=(
+                    "🖨 Файл для печати получен\n"
+                    f"Заказ №{poid}\n"
+                    f"Клиент: {user_label(update)}\n"
+                    f"Username: @{u.username if u and u.username else 'нет'}\n"
+                    f"User ID: {u.id if u else 'unknown'}\n\n"
+                    f"Выставить цену: /setprice {poid} 200"
+                ),
+            )
+        return
+
+    # 2) ЧЕК (документ) — твоя текущая логика
     is_admin_user = is_admin(update)
     oid = context.user_data.get("awaiting_receipt_order_id")
     if not oid:
@@ -1594,6 +1742,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("form_step", None)
         context.user_data.pop("pending_format_product", None)
         context.user_data.pop("awaiting_receipt_order_id", None)
+        context.user_data.pop("awaiting_print_file_order_id", None)
         set_mode(context, None)
 
         # Кнопки админ-панели
@@ -1663,8 +1812,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_text == "➕ Добавить товар":
             context.user_data["admin_action"] = "add_product"
             await update.message.reply_text(
-                "Формат:\nkey|Название|type(ready/individual)|price(если ready)|delivery_doc(если ready)\n"
-                "Пример:\nnewpack|📦 Новый комплект|ready|399|delivery_newpack.txt"
+                "Формат:\nkey|Название|type(ready/individual/print)|price(если ready)|delivery_doc(если ready)\n"
+                "Пример:\nnewpack|📦 Новый комплект|ready|399|delivery_newpack.txt\n"
+                "Для печати: print_service|🖨 Печать|print"
             )
             return
 
@@ -1843,8 +1993,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 key = parts[0]
                 title = parts[1]
                 ptype = parts[2].lower()
-                if ptype not in ("ready", "individual"):
-                    await update.message.reply_text("type должен быть ready или individual.")
+                if ptype not in ("ready", "individual", "print"):
+                    await update.message.reply_text("type должен быть ready, individual или print.")
                     return
                 prod = {"title": title, "type": ptype}
                 if ptype == "ready":
@@ -1998,7 +2148,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("ℹ️ Информация:", reply_markup=info_menu_keyboard())
         return
 
-    # Промокод (обновленная версия)
+    # 📦 Мои заказы / Вернуться к оплате
+    if user_text == "📦 Мои заказы":
+        oid, order = get_user_pending_payment_order(update.effective_user.id)
+
+        # если есть неоплаченный — показываем оплату
+        if order:
+            title = order.get("product_title") or order.get("product") or "Заказ"
+            price = order.get("price")
+            st = order_status_human(order.get("status"))
+
+            pay = get_payment_text()
+            await update.message.reply_text(
+                f"📦 Ваш заказ №{oid}\n"
+                f"Услуга: {title}\n"
+                f"Статус: {st}\n"
+                f"Сумма: {format_money(price)}\n\n"
+                f"{pay}\n\n"
+                f"Оплатите и нажмите «💳 Я оплатил(а) №{oid}», затем отправьте чек.",
+                reply_markup=payment_keyboard_for_order(str(oid)),
+            )
+            return
+
+        # иначе — просто покажем последний заказ (или сообщение что заказов нет)
+        oid2, last = last_order_for_user(update.effective_user.id)
+        if not last:
+            await update.message.reply_text(
+                "📦 У вас пока нет заказов.\nОткройте «🛒 Покупка» → «📂 Каталог».",
+                reply_markup=buy_menu_keyboard(),
+            )
+            return
+
+        await update.message.reply_text(
+            f"📦 Ваш последний заказ №{oid2}\n"
+            f"Услуга: {last.get('product_title')}\n"
+            f"Статус: {order_status_human(last.get('status'))}\n"
+            f"Сумма: {format_money(last.get('price'))}",
+            reply_markup=main_menu_keyboard(is_admin_user),
+        )
+        return
+
+    # Промокод
     if user_text == "🎟 Промокод":
         form_reset(context)
         exit_support_mode(context)
@@ -2035,7 +2225,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Статус заказа (обновленная версия с кнопкой оплаты)
+    # Статус заказа
     if user_text == "📌 Статус заказа":
         oid, order = last_order_for_user(update.effective_user.id)
         if not order:
@@ -2159,6 +2349,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "status": "priced",
                 "user_id": u.id if u else None,
                 "user_label": user_label(update),
+                "username": f"@{u.username}" if (u and u.username) else None,
                 "product": product_key,
                 "product_title": product["title"],
                 "price": price2,
@@ -2284,6 +2475,8 @@ def main():
     print("🧹 Снять бан (спам): только для авто-спама")
     print("📄 Принимаются чеки: фото и документы")
     print("💬 Поддержка: с кнопкой ответить")
+    print("🖨 Добавлена услуга печати (только Ч/Б) с загрузкой файлов")
+    print("📦 Добавлена кнопка «Мои заказы» с возвратом к оплате")
     app.run_polling()
 
 if __name__ == "__main__":
