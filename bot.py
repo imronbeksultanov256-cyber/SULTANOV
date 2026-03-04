@@ -346,7 +346,7 @@ def load_products():
             "gistology_ready": {
                 "title": "📚 СРС по гистологии (1–2 модуль) — комплект",
                 "type": "ready",
-                "price": 499,
+                "price": 350,
                 "delivery_doc": "delivery_gistology_ready.txt",
             },
             "kahoot": {"title": "🧠 Kahoot (индивидуально)", "type": "individual"},
