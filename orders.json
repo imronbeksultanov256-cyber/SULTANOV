@@ -1,0 +1,1081 @@
+{
+  "last_id": 94,
+  "orders": {
+    "1": {
+      "status": "priced",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "product": "srs_gist",
+      "product_title": "📚 СРС по гистологии",
+      "price": 25,
+      "created_at": "2026-02-27T14:28:43",
+      "promo_pct": 0,
+      "updated_at": "2026-03-02T15:52:55"
+    },
+    "2": {
+      "status": "pending",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "product": "kahoot",
+      "product_title": "🧠 Kahoot",
+      "price": 499,
+      "created_at": "2026-02-27T14:33:54"
+    },
+    "3": {
+      "status": "confirmed",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs_gist",
+      "product_title": "📚 СРС по гистологии",
+      "price": 499,
+      "created_at": "2026-02-27T14:35:17"
+    },
+    "4": {
+      "status": "needs_pricing",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "product": "custom",
+      "price": null,
+      "details": "📚 СРС по гистологии",
+      "created_at": "2026-02-27T16:05:26"
+    },
+    "5": {
+      "status": "confirmed",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs_gist",
+      "product_title": "📚 СРС по гистологии",
+      "price": 350,
+      "created_at": "2026-02-27T16:06:13"
+    },
+    "6": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "custom",
+      "price": null,
+      "details": "маршал, Презентация 16 сладов, до 23марта",
+      "created_at": "2026-02-27T16:12:13"
+    },
+    "7": {
+      "status": "confirmed",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs_gist",
+      "product_title": "📚 СРС по гистологии",
+      "price": 350,
+      "created_at": "2026-02-27T16:12:47"
+    },
+    "8": {
+      "status": "confirmed",
+      "user_id": 8584480300
+    },
+    "9": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "custom",
+      "price": null,
+      "details": "маршал, Презентация 16 сладов, до 23марта",
+      "created_at": "2026-02-27T17:23:21"
+    },
+    "10": {
+      "status": "support",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-02-27T17:24:41"
+    },
+    "11": {
+      "status": "support",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "custom",
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-02-27T17:24:54"
+    },
+    "12": {
+      "status": "delivered",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "custom",
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-02-27T17:25:40",
+      "updated_at": "2026-03-01T22:18:11"
+    },
+    "13": {
+      "status": "confirmed",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "kahoot",
+      "product_title": "🧠 Kahoot",
+      "price": 150,
+      "created_at": "2026-02-27T17:26:13"
+    },
+    "14": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "custom",
+      "price": 200,
+      "details": "маршал, Презентация 16 сладов, до 23марта",
+      "created_at": "2026-02-27T17:28:10",
+      "updated_at": "2026-03-01T14:07:53"
+    },
+    "15": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "custom",
+      "price": null,
+      "details": "📚 СРС по гистологии",
+      "created_at": "2026-02-27T17:52:18"
+    },
+    "16": {
+      "status": "confirmed",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "kahoot",
+      "product_title": "🧠 Kahoot",
+      "price": 150,
+      "created_at": "2026-02-27T17:53:20"
+    },
+    "17": {
+      "status": "support",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "product": "presentation",
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-02-27T19:02:17"
+    },
+    "18": {
+      "status": "support",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "product": "presentation",
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-02-27T19:02:21"
+    },
+    "19": {
+      "status": "needs_pricing",
+      "user_id": 8191971983,
+      "product": "srs",
+      "details": "хуй",
+      "created_at": "2026-02-27T19:53:28"
+    },
+    "20": {
+      "status": "reminded",
+      "user_id": 5966131656,
+      "product": "srs",
+      "details": "Imron pidarasImron pidarasImron pidarasImron pidarasImron pidarasImron pidaras",
+      "created_at": "2026-02-27T19:56:27",
+      "price": 99999999,
+      "updated_at": "2026-03-01T14:07:53"
+    },
+    "21": {
+      "status": "reminded",
+      "user_id": 5966131656,
+      "product": "doklad",
+      "details": "1231232131цывпне куы пчварвке нкве",
+      "created_at": "2026-02-27T19:57:48",
+      "price": 1000,
+      "updated_at": "2026-03-01T14:07:53"
+    },
+    "22": {
+      "status": "reminded",
+      "user_id": 8191971983,
+      "product": "srs",
+      "details": "gfg",
+      "created_at": "2026-02-27T19:58:46",
+      "price": 10,
+      "updated_at": "2026-03-01T14:07:54"
+    },
+    "23": {
+      "status": "reminded",
+      "user_id": 1258948209,
+      "product": "srs",
+      "details": "Ui6",
+      "created_at": "2026-02-27T21:13:53",
+      "price": 100,
+      "updated_at": "2026-03-01T14:07:54"
+    },
+    "24": {
+      "status": "reminded",
+      "user_id": 1258948209,
+      "product": "srs",
+      "details": "Ujk",
+      "created_at": "2026-02-27T21:15:06",
+      "price": 100,
+      "updated_at": "2026-03-01T14:07:54"
+    },
+    "25": {
+      "status": "reminded",
+      "user_id": 8191971983,
+      "product": "srs",
+      "details": "sis",
+      "created_at": "2026-02-27T21:16:19",
+      "price": 100,
+      "updated_at": "2026-03-01T14:07:54"
+    },
+    "26": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "product": "srs",
+      "details": "suga",
+      "created_at": "2026-02-28T12:49:28",
+      "price": 100,
+      "updated_at": "2026-03-01T14:07:55"
+    },
+    "27": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "product": "srs",
+      "details": "hi",
+      "created_at": "2026-02-28T13:43:57",
+      "price": 500,
+      "updated_at": "2026-03-01T14:07:55"
+    },
+    "28": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "product": "srs",
+      "details": "fun",
+      "created_at": "2026-02-28T13:50:25",
+      "price": 100,
+      "updated_at": "2026-03-01T14:07:55"
+    },
+    "29": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "product": "srs",
+      "details": "test",
+      "created_at": "2026-02-28T13:53:26",
+      "price": 200,
+      "updated_at": "2026-03-01T14:07:55"
+    },
+    "30": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "product": "srs",
+      "details": "dumb",
+      "created_at": "2026-02-28T13:54:33",
+      "price": 1,
+      "updated_at": "2026-03-01T14:07:56"
+    },
+    "31": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "referat",
+      "product_title": "📄 Реферат",
+      "details": "i",
+      "created_at": "2026-02-28T14:12:28",
+      "price": 1,
+      "updated_at": "2026-03-01T14:07:56"
+    },
+    "32": {
+      "status": "needs_pricing",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "product": "srs",
+      "product_title": "📚 СРС (Самостоятельная работа)",
+      "details": "vi",
+      "created_at": "2026-02-28T14:13:10"
+    },
+    "33": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "product": "srs",
+      "details": "hg",
+      "created_at": "2026-02-28T20:34:29",
+      "price": 1,
+      "updated_at": "2026-03-01T14:07:56"
+    },
+    "34": {
+      "status": "confirmed",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs",
+      "product_title": "📚 СРС (Самостоятельная работа)",
+      "details": "test",
+      "created_at": "2026-02-28T20:37:37",
+      "price": 1
+    },
+    "35": {
+      "status": "delivered",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 499,
+      "details": "ready_product",
+      "created_at": "2026-02-28T20:55:25",
+      "updated_at": "2026-03-01T13:41:48"
+    },
+    "36": {
+      "status": "confirmed",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "kahoot",
+      "product_title": "🧠 Kahoot",
+      "details": "isiss",
+      "created_at": "2026-02-28T20:56:00",
+      "price": 100
+    },
+    "37": {
+      "status": "support",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "created_at": "2026-02-28T21:00:14"
+    },
+    "38": {
+      "status": "support",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "created_at": "2026-02-28T21:02:01"
+    },
+    "39": {
+      "status": "pending",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 499,
+      "promo": "",
+      "promo_pct": 0,
+      "details": "ready_product",
+      "created_at": "2026-02-28T21:23:17",
+      "updated_at": "2026-02-28T21:23:24"
+    },
+    "40": {
+      "status": "pending",
+      "user_id": 8191971983,
+      "user_label": "Sultanov @slt_nv",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 449,
+      "promo": "PROMO10",
+      "promo_pct": 10,
+      "details": "ready_product",
+      "created_at": "2026-02-28T21:25:43",
+      "updated_at": "2026-02-28T21:26:15"
+    },
+    "41": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 499,
+      "promo": "",
+      "promo_pct": 0,
+      "details": "ready_product",
+      "created_at": "2026-02-28T21:52:30",
+      "updated_at": "2026-03-01T14:07:56"
+    },
+    "42": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs",
+      "product_title": "📚 СРС (самостоятельная работа)",
+      "details": {
+        "topic": "Бруклин",
+        "volume": "4",
+        "reqs": "нет",
+        "deadline": "2013"
+      },
+      "promo": "",
+      "suggested_price": 400,
+      "suggested_breakdown": "4 страница(ов) × 35 сом (мин 400)",
+      "promo_pct": 0,
+      "created_at": "2026-02-28T21:53:04",
+      "updated_at": "2026-02-28T21:53:04"
+    },
+    "43": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 499,
+      "promo": "",
+      "promo_pct": 0,
+      "details": "ready_product",
+      "created_at": "2026-02-28T22:04:34",
+      "updated_at": "2026-03-01T14:07:57"
+    },
+    "44": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs",
+      "product_title": "📚 СРС (самостоятельная работа)",
+      "details": {
+        "topic": "test",
+        "volume": "1",
+        "reqs": "нет",
+        "deadline": "1.1.1."
+      },
+      "promo": "НЕ",
+      "suggested_price": 400,
+      "suggested_breakdown": "1 страница(ов) × 35 сом (мин 400)",
+      "promo_pct": 0,
+      "created_at": "2026-02-28T22:05:16",
+      "updated_at": "2026-02-28T22:05:16"
+    },
+    "45": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs",
+      "product_title": "📚 СРС (самостоятельная работа)",
+      "details": {
+        "topic": "19",
+        "volume": "18",
+        "reqs": "1",
+        "deadline": "1"
+      },
+      "promo": "",
+      "suggested_price": 630,
+      "suggested_breakdown": "18 страница(ов) × 35 сом (мин 400)",
+      "promo_pct": 0,
+      "created_at": "2026-02-28T22:15:13",
+      "updated_at": "2026-02-28T22:15:13"
+    },
+    "46": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "referat",
+      "product_title": "📄 Реферат",
+      "details": {
+        "topic": "1",
+        "volume": "1",
+        "reqs": "нет",
+        "deadline": "1"
+      },
+      "promo": "",
+      "suggested_price": 500,
+      "suggested_breakdown": "1 страница(ов) × 40 сом (мин 500)",
+      "promo_pct": 0,
+      "created_at": "2026-02-28T22:40:36",
+      "updated_at": "2026-02-28T22:40:36"
+    },
+    "47": {
+      "status": "delivered",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 499,
+      "promo": "",
+      "promo_pct": 0,
+      "details": "ready_product",
+      "created_at": "2026-03-01T13:40:11",
+      "updated_at": "2026-03-01T13:40:42"
+    },
+    "48": {
+      "status": "ready",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs",
+      "product_title": "📚 СРС (самостоятельная работа)",
+      "details": {
+        "topic": "test",
+        "volume": "test",
+        "reqs": "test",
+        "deadline": "test"
+      },
+      "promo": "TEST",
+      "suggested_price": 400,
+      "suggested_breakdown": "минимум 400",
+      "promo_pct": 0,
+      "created_at": "2026-03-01T13:52:35",
+      "updated_at": "2026-03-01T13:54:26",
+      "price": 200
+    },
+    "49": {
+      "status": "ready",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:09:09",
+      "updated_at": "2026-03-01T14:09:40"
+    },
+    "50": {
+      "status": "support",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:14:00",
+      "updated_at": "2026-03-01T14:14:00"
+    },
+    "51": {
+      "status": "delivered",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs",
+      "product_title": "📚 СРС (самостоятельная работа)",
+      "details": {
+        "topic": "1",
+        "volume": "2",
+        "reqs": "2",
+        "deadline": "2"
+      },
+      "promo": "2",
+      "promo_pct": 0,
+      "suggested_price": 400,
+      "suggested_breakdown": "2 страница(ов) × 35 сом (мин 400)",
+      "created_at": "2026-03-01T14:14:15",
+      "updated_at": "2026-03-01T14:16:05",
+      "price": 200
+    },
+    "52": {
+      "status": "reminded",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 499,
+      "promo": "",
+      "promo_pct": 0,
+      "details": "ready_product",
+      "created_at": "2026-03-01T14:23:24",
+      "updated_at": "2026-03-01T18:04:03"
+    },
+    "53": {
+      "status": "pending",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 499,
+      "promo": "",
+      "promo_pct": 0,
+      "details": "ready_product",
+      "created_at": "2026-03-01T14:24:49",
+      "updated_at": "2026-03-01T14:25:10"
+    },
+    "54": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "presentation",
+      "product_title": "📊 Презентация (PowerPoint)",
+      "details": {
+        "topic": "11",
+        "volume": "3",
+        "reqs": "2",
+        "deadline": "я"
+      },
+      "promo": "PROMO10",
+      "promo_pct": 0,
+      "suggested_price": 400,
+      "suggested_breakdown": "3 слайд(ов) × 50 сом (мин 400)",
+      "created_at": "2026-03-01T14:25:44",
+      "updated_at": "2026-03-01T14:25:53",
+      "upsell": "doklad_with_discount_10"
+    },
+    "55": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:39:17",
+      "updated_at": "2026-03-01T14:39:17"
+    },
+    "56": {
+      "status": "needs_pricing",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs",
+      "product_title": "📚 СРС (самостоятельная работа)",
+      "details": {
+        "topic": "5",
+        "volume": "5",
+        "reqs": "5",
+        "deadline": "20"
+      },
+      "promo": "8MARCH",
+      "promo_pct": 25,
+      "suggested_price": 262,
+      "suggested_breakdown": "5 страница(ов) × 7 сом (мин 350)",
+      "created_at": "2026-03-01T14:40:53",
+      "updated_at": "2026-03-01T14:40:53"
+    },
+    "57": {
+      "status": "ready",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": "referat",
+      "product_title": "📄 Реферат",
+      "details": {
+        "topic": "Почему у человека растут волосы на лобке",
+        "volume": "500 страниц",
+        "reqs": "Нет",
+        "deadline": "Через час"
+      },
+      "promo": "PROMO10",
+      "promo_pct": 10,
+      "suggested_price": 3150,
+      "suggested_breakdown": "500 страница(ов) × 7 сом (мин 300)",
+      "created_at": "2026-03-01T14:46:07",
+      "updated_at": "2026-03-01T14:48:56",
+      "price": 900000
+    },
+    "58": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:49:35",
+      "updated_at": "2026-03-01T14:49:35"
+    },
+    "59": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:49:44",
+      "updated_at": "2026-03-01T14:49:44"
+    },
+    "60": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:49:50",
+      "updated_at": "2026-03-01T14:49:50"
+    },
+    "61": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:51:48",
+      "updated_at": "2026-03-01T14:51:48"
+    },
+    "62": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:51:51",
+      "updated_at": "2026-03-01T14:51:51"
+    },
+    "63": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:51:53",
+      "updated_at": "2026-03-01T14:51:53"
+    },
+    "64": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:51:56",
+      "updated_at": "2026-03-01T14:51:56"
+    },
+    "65": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:51:57",
+      "updated_at": "2026-03-01T14:51:57"
+    },
+    "66": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:01",
+      "updated_at": "2026-03-01T14:52:01"
+    },
+    "67": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:02",
+      "updated_at": "2026-03-01T14:52:02"
+    },
+    "68": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:05",
+      "updated_at": "2026-03-01T14:52:05"
+    },
+    "69": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:07",
+      "updated_at": "2026-03-01T14:52:07"
+    },
+    "70": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:10",
+      "updated_at": "2026-03-01T14:52:10"
+    },
+    "71": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:11",
+      "updated_at": "2026-03-01T14:52:11"
+    },
+    "72": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:52",
+      "updated_at": "2026-03-01T14:52:52"
+    },
+    "73": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:53",
+      "updated_at": "2026-03-01T14:52:53"
+    },
+    "74": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:54",
+      "updated_at": "2026-03-01T14:52:54"
+    },
+    "75": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:56",
+      "updated_at": "2026-03-01T14:52:56"
+    },
+    "76": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:57",
+      "updated_at": "2026-03-01T14:52:57"
+    },
+    "77": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:52:58",
+      "updated_at": "2026-03-01T14:52:58"
+    },
+    "78": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:53:00",
+      "updated_at": "2026-03-01T14:53:00"
+    },
+    "79": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:53:03",
+      "updated_at": "2026-03-01T14:53:03"
+    },
+    "80": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:53:04",
+      "updated_at": "2026-03-01T14:53:04"
+    },
+    "81": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:53:05",
+      "updated_at": "2026-03-01T14:53:05"
+    },
+    "82": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T14:53:06",
+      "updated_at": "2026-03-01T14:53:06"
+    },
+    "83": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T15:07:08",
+      "updated_at": "2026-03-01T15:07:08"
+    },
+    "84": {
+      "status": "support",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T15:07:10",
+      "updated_at": "2026-03-01T15:07:10"
+    },
+    "85": {
+      "status": "needs_pricing",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": "kahoot",
+      "product_title": "🧠 Kahoot (индивидуально)",
+      "details": {
+        "topic": "🧠 Kahoot",
+        "volume": "67",
+        "reqs": "Шашагслу",
+        "deadline": "Овшсщ"
+      },
+      "promo": "ЬС",
+      "promo_pct": 0,
+      "suggested_price": 670,
+      "suggested_breakdown": "67 вопрос(ов) × 10 сом (мин 300)",
+      "created_at": "2026-03-01T15:08:33",
+      "updated_at": "2026-03-01T15:08:33"
+    },
+    "86": {
+      "status": "delivered",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": "doklad",
+      "product_title": "📘 Доклад",
+      "details": {
+        "topic": "1273829173739 страниц",
+        "volume": "9999999999999999999999999999999 страниц 99999999999999999999999999 слайдов 1763926382638263826283638263738276274828163829193636 вопросов",
+        "reqs": "Огромный хуй,большие вставни и окно с видом на жопу",
+        "deadline": "Когда мать сдохнет"
+      },
+      "promo": "8MARCH",
+      "promo_pct": 25,
+      "suggested_price": 224999978,
+      "suggested_breakdown": "9999999 страница(ов) × 30 сом (мин 300)",
+      "created_at": "2026-03-01T15:12:13",
+      "updated_at": "2026-03-01T15:16:33",
+      "price": 1666666
+    },
+    "87": {
+      "status": "delivered",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T15:15:54",
+      "updated_at": "2026-03-01T15:19:04"
+    },
+    "88": {
+      "status": "delivered",
+      "user_id": 6500536055,
+      "user_label": "𝑻𝒂𝒍𝒊𝒑𝒐𝒗𝒔𝒌𝒚𝒚 @Talipovskyy",
+      "product": null,
+      "price": null,
+      "details": "support_ticket",
+      "created_at": "2026-03-01T15:53:45",
+      "updated_at": "2026-03-01T16:02:13"
+    },
+    "89": {
+      "status": "pending",
+      "user_id": 8412913999,
+      "user_label": ".",
+      "product": "kahoot",
+      "product_title": "🧠 Kahoot (индивидуально)",
+      "details": {
+        "topic": "психология",
+        "volume": "5/7",
+        "reqs": "да",
+        "deadline": "сегодня"
+      },
+      "promo": null,
+      "promo_pct": 0,
+      "suggested_price": 300,
+      "suggested_breakdown": "5 вопрос(ов) × 10 сом (мин 300)",
+      "created_at": "2026-03-01T15:57:35",
+      "updated_at": "2026-03-01T16:01:04",
+      "price": 1
+    },
+    "90": {
+      "status": "delivered",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "referat",
+      "product_title": "📄 Реферат",
+      "details": {
+        "topic": "test",
+        "volume": "test",
+        "reqs": "test",
+        "deadline": "test"
+      },
+      "promo": "8MARCH",
+      "promo_pct": 0,
+      "suggested_price": 500,
+      "suggested_breakdown": "минимум 500",
+      "created_at": "2026-03-01T16:04:42",
+      "updated_at": "2026-03-01T16:06:01",
+      "price": 700
+    },
+    "91": {
+      "status": "needs_pricing",
+      "user_id": 5966131656,
+      "user_label": ". @whyshadow_0",
+      "product": "kahoot",
+      "product_title": "🧠 Kahoot (индивидуально)",
+      "details": {
+        "topic": "Пидаразка",
+        "volume": "Хуй пися",
+        "reqs": "Имрон сын залупы удали бот свой нахуй",
+        "deadline": "Сейчас"
+      },
+      "promo": "PROMO10",
+      "promo_pct": 0,
+      "suggested_price": 300,
+      "suggested_breakdown": "минимум 300",
+      "created_at": "2026-03-01T20:23:37",
+      "updated_at": "2026-03-01T20:23:37"
+    },
+    "92": {
+      "status": "pending",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "srs",
+      "product_title": "📚 СРС (самостоятельная работа)",
+      "details": {
+        "topic": "Test",
+        "volume": "12",
+        "reqs": "нет",
+        "deadline": "217"
+      },
+      "promo": "8MARCH",
+      "promo_pct": 0,
+      "suggested_price": 420,
+      "suggested_breakdown": "12 страница(ов) × 35 сом (мин 400)",
+      "created_at": "2026-03-01T22:10:48",
+      "updated_at": "2026-03-01T22:12:07",
+      "price": 100
+    },
+    "93": {
+      "status": "inwork",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "referat",
+      "product_title": "📄 Реферат",
+      "details": {
+        "topic": "Революция",
+        "volume": "12",
+        "reqs": "Нет",
+        "deadline": "Скоро"
+      },
+      "promo": "STUB5",
+      "promo_pct": 0,
+      "suggested_price": 500,
+      "suggested_breakdown": "12 страница(ов) × 40 сом (мин 500)",
+      "created_at": "2026-03-01T22:14:40",
+      "updated_at": "2026-03-01T22:16:36",
+      "price": 100
+    },
+    "94": {
+      "status": "priced",
+      "user_id": 8584480300,
+      "user_label": "m",
+      "product": "gistology_ready",
+      "product_title": "📚 СРС по гистологии (1–2 модуль) — комплект",
+      "price": 499,
+      "promo": "",
+      "promo_pct": 0,
+      "details": "ready_product",
+      "created_at": "2026-03-03T00:59:04",
+      "updated_at": "2026-03-03T00:59:04"
+    }
+  }
+}
