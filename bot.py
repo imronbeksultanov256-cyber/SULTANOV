@@ -141,18 +141,11 @@ def support_reply_markup(tid: str):
     )
 
 def key_from_button_text(btn: str):
-    if btn == "📚 СРС по гистологии (комплект)":
-        return "gistology_ready"
-    if btn == "🧠 Kahoot":
-        return "kahoot"
-    if btn == "📚 СРС (Самостоятельная работа)":
-        return "srs"
-    if btn == "📄 Реферат":
-        return "referat"
-    if btn == "📘 Доклад":
-        return "doklad"
-    if btn == "📊 Презентация (PowerPoint)":
-        return "presentation"
+    """Динамическое определение ключа товара по названию кнопки"""
+    # сначала ищем по PRODUCTS title
+    for k, p in PRODUCTS.items():
+        if p.get("title") == btn:
+            return k
     return None
 
 def last_order_for_user(user_id: int):
@@ -161,6 +154,16 @@ def last_order_for_user(user_id: int):
     items.sort(key=lambda x: int(x[0]))
     return items[-1] if items else (None, None)
 
+# =====================================================
+# Мини-FSM: управление режимами
+# =====================================================
+def set_mode(context, mode: str | None):
+    """Устанавливает режим работы пользователя"""
+    context.user_data["mode"] = mode
+
+def get_mode(context):
+    """Возвращает текущий режим работы пользователя"""
+    return context.user_data.get("mode")
 
 # =====================================================
 # BAN SYSTEM
@@ -465,18 +468,14 @@ def buy_menu_keyboard():
     )
 
 def catalog_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("📚 СРС по гистологии (комплект)")],
-            [KeyboardButton("🧠 Kahoot")],
-            [KeyboardButton("📚 СРС (Самостоятельная работа)")],
-            [KeyboardButton("📄 Реферат")],
-            [KeyboardButton("📘 Доклад")],
-            [KeyboardButton("📊 Презентация (PowerPoint)")],
-            [KeyboardButton("⬅️ Назад")],
-        ],
-        resize_keyboard=True,
-    )
+    """Динамическая клавиатура каталога из PRODUCTS"""
+    rows = []
+    # показываем товары из PRODUCTS
+    for key, p in PRODUCTS.items():
+        title = p.get("title") or key
+        rows.append([KeyboardButton(title)])
+    rows.append([KeyboardButton("⬅️ Назад")])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 def info_menu_keyboard():
     return ReplyKeyboardMarkup(
@@ -568,10 +567,14 @@ def form_reset(context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("selected_product", None)
     context.user_data.pop("work_format", None)
     context.user_data.pop("pending_format_product", None)
+    # очищаем режим оформления
+    if context.user_data.get("mode") in ("order_form", "format"):
+        context.user_data["mode"] = None
 
 async def form_start(update: Update, context: ContextTypes.DEFAULT_TYPE, product_key: str):
     # Выходим из режима поддержки
     exit_support_mode(context)
+    set_mode(context, "order_form")
 
     context.user_data["selected_product"] = product_key
     context.user_data["form_step"] = 0
@@ -792,14 +795,16 @@ async def _reject_order(context: ContextTypes.DEFAULT_TYPE, oid: str, notify_adm
 
     user_id = order.get("user_id")
     if user_id:
+        # возвращаем кнопку "я оплатил" для этого заказа
         await context.bot.send_message(
             chat_id=user_id,
             text=(
-                f"⚠️ Не удалось подтвердить оплату по заказу №{oid}.\n\n"
-                "Пожалуйста, отправьте *полный* чек (чтобы было видно сумму и дату/время) "
-                "или нажмите «🆘 Поддержка»."
+                f"❌ Чек отклонён по заказу №{oid}.\n\n"
+                "Отправьте *полный* чек (чтобы было видно сумму и дату/время) "
+                "и нажмите кнопку оплаты ещё раз."
             ),
-            reply_markup=main_menu_keyboard(False),
+            reply_markup=payment_keyboard_for_order(oid),
+            parse_mode="Markdown",
         )
 
     if notify_admin and admin_message:
@@ -1584,6 +1589,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ================= ADMIN PANEL =================
     if is_admin(update):
+        # чтобы админские действия не конфликтовали с пользовательскими режимами
+        context.user_data.pop("waiting_promo_only", None)
+        context.user_data.pop("form_step", None)
+        context.user_data.pop("pending_format_product", None)
+        context.user_data.pop("awaiting_receipt_order_id", None)
+        set_mode(context, None)
+
         # Кнопки админ-панели
         if user_text == "🧾 Чеки (pending)":
             await pending(update, context)
@@ -1896,6 +1908,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("✅ Готово.", reply_markup=admin_panel_keyboard())
                 return
 
+    # ===== Промокод (должен быть до формы) =====
+    if context.user_data.get("waiting_promo_only"):
+        context.user_data["waiting_promo_only"] = False
+        promo = user_text.strip()
+        if promo.lower() in ("нет", "no", "-"):
+            context.user_data["promo_default"] = ""
+            await update.message.reply_text("Ок, без промокода 🙂", reply_markup=buy_menu_keyboard())
+        else:
+            promo_u = promo.upper()
+            discount, error = validate_promo(promo_u)
+            if discount:
+                context.user_data["promo_default"] = promo_u
+                await update.message.reply_text(
+                    f"✅ Промокод {promo_u} активирован (-{discount}%)!\n"
+                    f"Действует на текущий заказ.",
+                    reply_markup=buy_menu_keyboard()
+                )
+            else:
+                context.user_data["promo_default"] = promo_u
+                await update.message.reply_text(
+                    f"⚠️ {error}\n"
+                    f"Но я сохраню — менеджер проверит.",
+                    reply_markup=buy_menu_keyboard()
+                )
+        set_mode(context, None)
+        return
+
     # Если идёт форма — обрабатываем в приоритете
     if context.user_data.get("form_step") is not None:
         handled = await form_continue(update, context, user_text)
@@ -1959,39 +1998,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("ℹ️ Информация:", reply_markup=info_menu_keyboard())
         return
 
-    # Промокод
+    # Промокод (обновленная версия)
     if user_text == "🎟 Промокод":
+        form_reset(context)
+        exit_support_mode(context)
+        set_mode(context, "promo")
         await update.message.reply_text(
             "Отправьте промокод одним сообщением.\nНапример: PROMO10\n\n"
             "Если нет — напишите «нет».",
             reply_markup=ReplyKeyboardRemove(),
         )
         context.user_data["waiting_promo_only"] = True
-        return
-
-    if context.user_data.get("waiting_promo_only"):
-        context.user_data["waiting_promo_only"] = False
-        promo = user_text.strip()
-        if promo.lower() in ("нет", "no", "-"):
-            context.user_data["promo_default"] = ""
-            await update.message.reply_text("Ок, без промокода 🙂", reply_markup=buy_menu_keyboard())
-        else:
-            promo_u = promo.upper()
-            discount, error = validate_promo(promo_u)
-            if discount:
-                context.user_data["promo_default"] = promo_u
-                await update.message.reply_text(
-                    f"✅ Промокод {promo_u} активирован (-{discount}%)!\n"
-                    f"Действует на текущий заказ.",
-                    reply_markup=buy_menu_keyboard()
-                )
-            else:
-                context.user_data["promo_default"] = promo_u
-                await update.message.reply_text(
-                    f"⚠️ {error}\n"
-                    f"Но я сохраню — менеджер проверит.",
-                    reply_markup=buy_menu_keyboard()
-                )
         return
 
     # Инфо раздел
@@ -2018,15 +2035,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Статус заказа
+    # Статус заказа (обновленная версия с кнопкой оплаты)
     if user_text == "📌 Статус заказа":
         oid, order = last_order_for_user(update.effective_user.id)
         if not order:
             await update.message.reply_text("Пока нет заказов. Откройте «📂 Каталог».", reply_markup=buy_menu_keyboard())
             return
-        st = order_status_human(order.get("status"))
+
+        st_raw = order.get("status")
+        st = order_status_human(st_raw)
         title = order.get("product_title") or order.get("product")
         price = order.get("price")
+
+        # если ждём оплату — показываем кнопку оплаты
+        if st_raw in ("priced", "reminded"):
+            pay = get_payment_text()
+            await update.message.reply_text(
+                f"📌 Заказ №{oid}\n"
+                f"Услуга: {title}\n"
+                f"Статус: {st}\n"
+                f"Сумма: {format_money(price)}\n\n"
+                f"{pay}\n\n"
+                f"Нажмите «💳 Я оплатил(а) №{oid}» после оплаты и отправьте чек.",
+                reply_markup=payment_keyboard_for_order(str(oid)),
+            )
+            return
+
         await update.message.reply_text(
             f"📌 Ваш последний заказ:\n"
             f"Номер заказа: №{oid}\n"
