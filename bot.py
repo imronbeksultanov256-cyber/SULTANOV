@@ -589,17 +589,28 @@ async def unpaid_reminder(app):
 # Support reply button handler
 # =====================================================
 async def support_reply_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик кнопки ответа на обращение"""
-    query = update.callback_query
-    await query.answer()
+    try:
+        query = update.callback_query
 
-    tid = (query.data or "").replace("support_reply_", "").replace("T", "").strip()
-    if not tid.isdigit():
-        await query.message.reply_text("❌ Некорректный ID обращения.")
-        return
+        # убирает загрузку
+        await query.answer()
 
-    context.user_data["reply_ticket"] = tid
-    await query.message.reply_text(f"✍️ Напишите ответ клиенту по обращению {ticket_tag(tid)}:")
+        data = query.data or ""
+        tid = data.replace("support_reply_", "").replace("T", "").strip()
+
+        if not tid:
+            await query.message.reply_text("❌ Не удалось определить обращение.")
+            return
+
+        context.user_data["reply_ticket"] = tid
+
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=f"✍️ Напишите ответ клиенту по обращению {ticket_tag(tid)}:"
+        )
+
+    except Exception as e:
+        print("ERROR support_reply_button:", e)
 
 # =====================================================
 # Handlers: start + user
