@@ -593,7 +593,7 @@ async def support_reply_button(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
 
-    tid = (query.data or "").replace("support_reply_", "").strip()
+    tid = (query.data or "").replace("support_reply_", "").replace("T", "").strip()
     if not tid.isdigit():
         await query.message.reply_text("❌ Некорректный ID обращения.")
         return
