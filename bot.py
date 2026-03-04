@@ -70,6 +70,37 @@ def save_json(filepath, data):
 # =====================================================
 # Helper functions
 # =====================================================
+def format_print_details(details: dict) -> str:
+    """Красивый вывод заявки на печать (Ч/Б) вместо JSON"""
+    if not isinstance(details, dict):
+        return "—"
+
+    fmt = details.get("format", "—")
+    sides = details.get("sides", "—")
+    copies = details.get("copies", "—")
+    pages = details.get("pages", "—")
+    address = details.get("address", "—")
+    deadline = details.get("deadline", "—")
+    promo = details.get("promo", "—")
+
+    # у вас только ч/б
+    color = "Ч/Б"
+
+    lines = [
+        "📌 Детали печати:",
+        f"• Формат: {fmt}",
+        f"• Сторон: {sides}",
+        f"• Экземпляров: {copies}",
+        f"• Страниц: {pages}",
+        f"• Цвет: {color}",
+        f"• Адрес: {address}",
+        f"• Срок: {deadline}",
+    ]
+    if promo and promo not in ("—", "", None):
+        lines.append(f"• Промокод: {promo}")
+
+    return "\n".join(lines)
+    
 def extract_first_int(text: str):
     """Извлекает первое число из текста"""
     if not text:
@@ -164,6 +195,17 @@ def get_user_pending_payment_order(user_id: int):
     # берём самый свежий
     items.sort(key=lambda x: int(x[0]))
     return items[-1]
+
+# =====================================================
+# Мини-FSM: управление режимами
+# =====================================================
+def set_mode(context, mode: str | None):
+    """Устанавливает режим работы пользователя"""
+    context.user_data["mode"] = mode
+
+def get_mode(context):
+    """Возвращает текущий режим работы пользователя"""
+    return context.user_data.get("mode")
 
 # =====================================================
 # BAN SYSTEM
@@ -364,20 +406,7 @@ def load_products():
         }
         save_json(PRODUCTS_PATH, default_products)
         return default_products
-    
-    # Если файл существует, загружаем и проверяем наличие товара печати
-    products = load_json(PRODUCTS_PATH, {})
-    
-    # Добавляем товар печати, если его нет
-    if "print_service" not in products:
-        products["print_service"] = {
-            "title": "🖨 Печать (распечатать файл, только Ч/Б)",
-            "type": "print"
-        }
-        save_json(PRODUCTS_PATH, products)
-        print("✅ Добавлен товар печати в products.json")
-    
-    return products
+    return load_json(PRODUCTS_PATH, {})
 
 PRODUCTS = load_products()
 
@@ -597,10 +626,14 @@ def form_reset(context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("pending_format_product", None)
     context.user_data.pop("form_kind", None)
     context.user_data.pop("awaiting_print_file_order_id", None)
+    # очищаем режим оформления
+    if context.user_data.get("mode") in ("order_form", "format"):
+        context.user_data["mode"] = None
 
 async def form_start(update: Update, context: ContextTypes.DEFAULT_TYPE, product_key: str):
     # Выходим из режима поддержки
     exit_support_mode(context)
+    set_mode(context, "order_form")
 
     context.user_data["selected_product"] = product_key
     context.user_data["form_step"] = 0
@@ -687,7 +720,16 @@ async def form_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, user
                     f"Клиент: {user_label(update)}\n"
                     f"Username: @{u.username if u and u.username else 'нет'}\n"
                     f"User ID: {u.id if u else 'unknown'}\n\n"
-                    f"Детали:\n{json.dumps(form_data, ensure_ascii=False, indent=2)}\n\n"
+                    f"Детали:\n"
+                    f"📌 Детали печати:\n"
+                    f"• Формат: {form_data.get('format')}\n"
+                    f"• Сторон: {form_data.get('sides')}\n"
+                    f"• Экземпляров: {form_data.get('copies')}\n"
+                    f"• Страниц: {form_data.get('pages')}\n"
+                    f"• Цвет: Ч/Б\n"
+                    f"• Адрес: {form_data.get('address')}\n"
+                    f"• Срок: {form_data.get('deadline')}\n"
+                    f"• Промокод: {form_data.get('promo')}\n\n"
                     f"После файла выстави цену: /setprice {oid} 200",
                 )
             form_reset(context)
@@ -1272,7 +1314,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🖨 Фото для печати получено\n"
                     f"Заказ №{poid}\n"
                     f"Клиент: {user_label(update)}\n"
-                    f"Username: @{u.username if u and u.username else 'нет'}\n"
+                    f"Username: @{u.username}" if u and u.username else "Username: —"
                     f"User ID: {u.id if u else 'unknown'}\n\n"
                     f"Выставить цену: /setprice {poid} 200"
                 ),
@@ -1741,6 +1783,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("pending_format_product", None)
         context.user_data.pop("awaiting_receipt_order_id", None)
         context.user_data.pop("awaiting_print_file_order_id", None)
+        set_mode(context, None)
 
         # Кнопки админ-панели
         if user_text == "🧾 Чеки (pending)":
@@ -1995,20 +2038,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
                 prod = {"title": title, "type": ptype}
                 if ptype == "ready":
-                    if len(parts) < 4:
-                        await update.message.reply_text("Для ready товара нужна цена (4-й параметр)")
-                        return
-                    price = extract_first_int(parts[3]) or 0
+                    price = extract_first_int(parts[3] if len(parts) > 3 else "") or 0
                     delivery_doc = parts[4] if len(parts) > 4 else ""
                     prod["price"] = int(price)
                     if delivery_doc:
                         prod["delivery_doc"] = delivery_doc
-                elif ptype == "print":
-                    # Для печати можно добавить дополнительные параметры если нужно
-                    pass
                 PRODUCTS[key] = prod
                 save_json(PRODUCTS_PATH, PRODUCTS)
-                await update.message.reply_text(f"✅ Товар '{title}' добавлен в каталог.", reply_markup=admin_panel_keyboard())
+                await update.message.reply_text("✅ Товар добавлен.", reply_markup=admin_panel_keyboard())
                 context.user_data["admin_action"] = None
                 return
 
@@ -2085,6 +2122,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"Но я сохраню — менеджер проверит.",
                     reply_markup=buy_menu_keyboard()
                 )
+        set_mode(context, None)
         return
 
     # Если идёт форма — обрабатываем в приоритете
@@ -2194,6 +2232,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_text == "🎟 Промокод":
         form_reset(context)
         exit_support_mode(context)
+        set_mode(context, "promo")
         await update.message.reply_text(
             "Отправьте промокод одним сообщением.\nНапример: PROMO10\n\n"
             "Если нет — напишите «нет».",
