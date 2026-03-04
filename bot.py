@@ -591,26 +591,41 @@ async def unpaid_reminder(app):
 async def support_reply_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         query = update.callback_query
+        await query.answer()  # убираем "часики"
+        
+        # Проверяем, что админ (иначе просто игнорируем)
+        if not is_admin(update):
+            await query.message.reply_text("❌ Эта кнопка только для менеджера.")
+            return
 
-        # убирает загрузку
-        await query.answer()
+        data = query.data
+        if not data or not data.startswith("support_reply_"):
+            await query.message.reply_text("❌ Неверный формат данных.")
+            return
 
-        data = query.data or ""
-        tid = data.replace("support_reply_", "").replace("T", "").strip()
+        tid = data.replace("support_reply_", "").strip()
+        if not tid.isdigit():
+            await query.message.reply_text("❌ Некорректный ID обращения.")
+            return
 
-        if not tid:
-            await query.message.reply_text("❌ Не удалось определить обращение.")
+        # Проверяем существование тикета
+        ticket = TICKETS_DB.get("tickets", {}).get(tid)
+        if not ticket:
+            await query.message.reply_text("❌ Обращение не найдено.")
             return
 
         context.user_data["reply_ticket"] = tid
+        await query.message.reply_text(f"✍️ Напишите ответ клиенту по обращению {ticket_tag(tid)}:")
 
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=f"✍️ Напишите ответ клиенту по обращению {ticket_tag(tid)}:"
-        )
+        # Логируем для отладки
+        print(f"✅ Кнопка нажата, tid={tid}")
 
     except Exception as e:
-        print("ERROR support_reply_button:", e)
+        print(f"❌ Ошибка в support_reply_button: {e}")
+        try:
+            await query.message.reply_text(f"⚠️ Ошибка: {e}")
+        except:
+            pass
 
 # =====================================================
 # Handlers: start + user
